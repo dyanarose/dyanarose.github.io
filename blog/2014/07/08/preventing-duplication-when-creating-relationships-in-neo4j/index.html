@@ -5,7 +5,7 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>These Things Happen</title>
+  <title>Preventing Duplication When Creating Relationships in Neo4j - These Things Happen</title>
   <meta name="author" content="Dyana Rose">
 
   
@@ -19,7 +19,7 @@ CREATE (p) - [:INTERVIEWED_IN] -&gt; (e) &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://dyanarose.github.io">
+  <link rel="canonical" href="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="These Things Happen" type="application/atom+xml">
@@ -65,15 +65,12 @@ CREATE (p) - [:INTERVIEWED_IN] -&gt; (e) &hellip;">
 </nav>
   <div id="main">
     <div id="content">
-      <div class="blog-index">
+      <div>
+<article class="hentry" role="article">
   
-  
-  
-    <article>
-      
   <header>
     
-      <h1 class="entry-title"><a href="/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/">Preventing Duplication When Creating Relationships in Neo4j</a></h1>
+      <h1 class="entry-title">Preventing Duplication When Creating Relationships in Neo4j</h1>
     
     
       <p class="meta">
@@ -96,7 +93,7 @@ CREATE (p) - [:INTERVIEWED_IN] -&gt; (e) &hellip;">
   </header>
 
 
-  <div class="entry-content"><p>Creating relationships between known nodes using Cypher in Neo4j is simple.</p>
+<div class="entry-content"><p>Creating relationships between known nodes using Cypher in Neo4j is simple.</p>
 
 <pre><code>MATCH (p:Person), (e:Episode)
 CREATE (p) - [:INTERVIEWED_IN] -&gt; (e)
@@ -175,18 +172,57 @@ CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
 </ul>
 
 </div>
+
+
+  <footer>
+    <p class="meta">
+      
   
+
+<span class="byline author vcard">Posted by <span class="fn">Dyana Rose</span></span>
+
+      
+
+
+
+
+
+
+
+
   
 
 
-    </article>
+<time datetime="2014-07-08T20:50:10+01:00" pubdate data-updated="true">Jul 8<sup>th</sup>, 2014</time>
+      
+
+<span class="categories">
   
-  <div class="pagination">
+    <a class='category' href='/blog/categories/cypher/'>cypher</a>, <a class='category' href='/blog/categories/neo4j/'>neo4j</a>
+  
+</span>
+
+
+    </p>
     
-    <a href="/blog/archives">Blog Archives</a>
-    
-  </div>
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/" data-via="dyanarose" data-counturl="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/" >Tweet</a>
+  
+  
+  
 </div>
+
+    
+    <p class="meta">
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
 <aside class="sidebar">
   
     <section>
@@ -203,7 +239,7 @@ CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
 <section>
   <h1>GitHub Repos</h1>
   <ul id="gh_repos">
-    <li class="loading">Status updating&#8230;</li>
+    <li class="loading">Status updating...</li>
   </ul>
   
   <a href="https://github.com/dyanarose">@dyanarose</a> on GitHub
@@ -235,6 +271,7 @@ CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
 
   
 </aside>
+
 
     </div>
   </div>
