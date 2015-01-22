@@ -8,64 +8,81 @@ published: true
 ---
 #Standard date/time format strings cheat sheet#
 
+Note: Moment.js doesn't insert a comma between day and year for en-US
+
 <table class="dateformat">
 <thead>
-<tr><th>common name</th><th>example (en-US)</th><th>.NET</th><th>Angular.js</th><th>Kendo UI</th></tr>
+<tr><th>common name</th><th>example (en-US)</th><th>.NET</th><th>Angular.js</th><th>Kendo UI</th><th>Moment.js</th></tr>
 </thead>
 <tbody>
 <tr>
-<td>short date</td><td>6/15/2009</td><td>d</td><td>shortDate</td><td>d</td>
+<td>short date</td><td>6/15/2009</td><td>d</td><td>shortDate</td><td>d</td>   <td></td>
 </tr>
 <tr>
-<td>long date</td><td>Monday, June 15, 2009</td><td>D</td><td>fullDate</td><td>D</td>
+<td>long date</td><td>Monday, June 15, 2009</td><td>D</td><td>fullDate</td><td>D</td><td></td>
 </tr>
 <tr>
-<td>Full date short time</td><td>Monday, June 15, 2009 1:45 PM</td><td>f</td><td></td><td></td>
+<td>Full date short time</td><td>Monday, June 15, 2009 1:45 PM</td><td>f</td><td></td><td></td><td>LLLL</td>
 </tr>
 <tr>
-<td>Full date long time</td><td>Monday, June 15, 2009 1:45:30 PM</td><td>F</td><td></td><td>F</td>
+<td>Medium full date short time</td><td>Mon, June 15, 2009 1:45 PM</td><td></td><td></td><td></td><td>llll</td>
 </tr>
 <tr>
-<td>General date short time</td><td>6/15/2009 1:45 PM</td><td>g</td><td>short</td><td>g</td>
+<td>Full date long time</td><td>Monday, June 15, 2009 1:45:30 PM</td><td>F</td><td></td><td>F</td><td></td>
 </tr>
 <tr>
-<td>General date long time</td><td>6/15/2009 1:45:30 PM</td><td>G</td><td></td><td>G</td>
+<td>General date short time</td><td>6/15/2009 1:45 PM</td><td>g</td><td>short</td><td>g</td><td></td>
 </tr>
 <tr>
-<td>Long date</td><td>September 3, 2010</td><td></td><td>longDate</td><td></td>
+<td>General date long time</td><td>6/15/2009 1:45:30 PM</td><td>G</td><td></td><td>G</td><td></td>
 </tr>
 <tr>
-<td>Medium date</td><td>Sep 3, 2010</td><td></td><td>mediumDate</td><td></td>
+<td>Long date</td><td>September 3, 2010</td><td></td><td>longDate</td><td></td><td>LL</td>
 </tr>
 <tr>
-<td>Medium date/time</td><td>Sep 3, 2010 12:05:08 PM</td><td></td><td>medium</td><td></td>
+<td>Long date/ short time</td><td>September 3, 2010 12:05 PM</td><td></td><td></td><td></td><td>LLL</td>
 </tr>
 <tr>
-<td>Month/day</td><td>June 15</td><td>M or m</td><td></td><td>M or m</td>
+<td>Medium date</td><td>Sep 3, 2010</td><td></td><td>mediumDate</td><td></td><td>ll</td>
 </tr>
 <tr>
-<td>Round-trip date/time</td><td>2009-06-15T13:45:30.0000000</td><td>O or o</td><td></td><td></td>
+<td>Medium date/ long time</td><td>Sep 3, 2010 12:05:08 PM</td><td></td><td>medium</td><td></td><td></td>
 </tr>
 <tr>
-<td>RFC1123</td><td>Mon, 15 Jun 2009 20:45:30 GMT</td><td>R or r</td><td></td><td></td>
+<td>Medium date/ short time</td><td>Sep 3, 2010 12:05 PM</td><td></td><td></td><td></td><td>lll</td>
 </tr>
 <tr>
-<td>Sortable date/time</td><td>2009-06-15T13:45:30</td><td>s</td><td></td><td></td>
+<td>Month/day</td><td>June 15</td><td>M or m</td><td></td><td>M or m</td><td></td>
 </tr>
 <tr>
-<td>Short time</td><td>1:45 PM</td><td>t</td><td>shortTime</td><td></td>
+<td>padded date</td><td>06/05/2009</td><td></td><td></td><td></td>   <td>L</td>
 </tr>
 <tr>
-<td>Long time</td><td>1:45:30 PM</td><td>T</td><td>mediumTime</td><td></td>
+<td>unpadded date</td><td>6/5/2009</td><td></td><td></td><td></td>   <td>l</td>
 </tr>
 <tr>
-<td>Universal sortable date/time</td><td>2009-06-15 20:45:30Z</td><td>u</td><td></td><td>u</td>
+<td>Round-trip date/time</td><td>2009-06-15T13:45:30.0000000</td><td>O or o</td><td></td><td></td> <td></td>
 </tr>
 <tr>
-<td>Universal full date/time</td><td>Monday, June 15, 2009 8:45:30 PM</td><td>U</td><td></td><td></td>
+<td>RFC1123</td><td>Mon, 15 Jun 2009 20:45:30 GMT</td><td>R or r</td><td></td><td></td><td></td>
 </tr>
 <tr>
-<td>Year/Month</td><td>June, 2009</td><td>Y or y</td><td></td><td>Y or y</td>
+<td>Sortable date/time</td><td>2009-06-15T13:45:30</td><td>s</td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td>Short time</td><td>1:45 PM</td><td>t</td><td>shortTime</td><td></td> <td>LT</td>
+</tr>
+<tr>
+<td>Long time</td><td>1:45:30 PM</td><td>T</td><td>mediumTime</td><td></td><td>LTS</td>
+</tr>
+<tr>
+<td>Universal sortable date/time</td><td>2009-06-15 20:45:30Z</td><td>u</td><td></td><td>u</td><td></td>
+</tr>
+<tr>
+<td>Universal full date/time</td><td>Monday, June 15, 2009 8:45:30 PM</td><td>U</td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td>Year/Month</td><td>June, 2009</td><td>Y or y</td><td></td><td>Y or y</td><td></td>
 </tr>
 </tbody>
 </table>
