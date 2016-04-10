@@ -4,7 +4,11 @@
   <title><![CDATA[These Things Happen]]></title>
   <link href="http://dyanarose.github.io/atom.xml" rel="self"/>
   <link href="http://dyanarose.github.io/"/>
+<<<<<<< HEAD
   <updated>2016-04-10T15:52:01+01:00</updated>
+=======
+  <updated>2015-01-22T20:04:18+00:00</updated>
+>>>>>>> 96d2dad1058ffdcdef7b5cb1012063a1171468a9
   <id>http://dyanarose.github.io/</id>
   <author>
     <name><![CDATA[Dyana Rose]]></name>
@@ -14,6 +18,7 @@
 
   
   <entry>
+<<<<<<< HEAD
     <title type="html"><![CDATA[Understanding the Different Sparl SQL DataTypes]]></title>
     <link href="http://dyanarose.github.io/blog/2016/04/09/understanding-the-different-sparl-sql-datatypes/"/>
     <updated>2016-04-09T12:57:06+01:00</updated>
@@ -1268,6 +1273,8 @@
   </entry>
   
   <entry>
+=======
+>>>>>>> 96d2dad1058ffdcdef7b5cb1012063a1171468a9
     <title type="html"><![CDATA[Preventing Duplication When Creating Relationships in Neo4j]]></title>
     <link href="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
     <updated>2014-07-08T20:50:10+01:00</updated>
