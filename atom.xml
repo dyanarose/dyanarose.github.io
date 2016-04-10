@@ -4,7 +4,7 @@
   <title><![CDATA[These Things Happen]]></title>
   <link href="http://dyanarose.github.io/atom.xml" rel="self"/>
   <link href="http://dyanarose.github.io/"/>
-  <updated>2016-04-10T16:07:04+01:00</updated>
+  <updated>2016-04-10T16:11:06+01:00</updated>
   <id>http://dyanarose.github.io/</id>
   <author>
     <name><![CDATA[Dyana Rose]]></name>
@@ -18,11 +18,13 @@
     <link href="http://dyanarose.github.io/blog/2016/04/09/understanding-the-different-sparl-sql-datatypes/"/>
     <updated>2016-04-09T12:57:06+01:00</updated>
     <id>http://dyanarose.github.io/blog/2016/04/09/understanding-the-different-sparl-sql-datatypes</id>
-    <content type="html"><![CDATA[<p>Exploring how different DataTypes in Spark SQL are imported from line delimited json.</p>
+    <content type="html"><![CDATA[<p>I&rsquo;ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I&rsquo;m converting to parquet files. The data won&rsquo;t all be processed at once and the schema will need to grow, so it&rsquo;s imperative that the parquet files have schemas that are compatible.</p>
 
 <p>The only one I really can&rsquo;t get working yet is the CalendarIntervalType.</p>
 
 <p>Looking at the Spark source files <a href="https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/literals.scala">literals.scala</a> and <a href="https://github.com/apache/spark/blob/master/common/unsafe/src/main/java/org/apache/spark/unsafe/types/CalendarInterval.java">CalendarInterval.java</a> I would assume that <code>CalendarInterval.fromString</code> is called with the value, however I&rsquo;m just getting nulls back currently when passing in a value like &lsquo;interval 2 days&rsquo; which when passed to <code>CalendarInterval.fromString</code> returns a non-null <code>CalendarInterval</code>.</p>
+
+<p>Source code for the tests is at: <a href="https://github.com/dyanarose/dlr-spark">https://github.com/dyanarose/dlr-spark</a></p>
 
 <p>Results:</p>
 
