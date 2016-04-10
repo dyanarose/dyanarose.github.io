@@ -1,0 +1,612 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Spark Sql | These Things Happen]]></title>
+  <link href="http://dyanarose.github.io/blog/categories/spark-sql/atom.xml" rel="self"/>
+  <link href="http://dyanarose.github.io/"/>
+  <updated>2016-04-10T15:52:01+01:00</updated>
+  <id>http://dyanarose.github.io/</id>
+  <author>
+    <name><![CDATA[Dyana Rose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Understanding the Different Sparl SQL DataTypes]]></title>
+    <link href="http://dyanarose.github.io/blog/2016/04/09/understanding-the-different-sparl-sql-datatypes/"/>
+    <updated>2016-04-09T12:57:06+01:00</updated>
+    <id>http://dyanarose.github.io/blog/2016/04/09/understanding-the-different-sparl-sql-datatypes</id>
+    <content type="html"><![CDATA[<p>Exploring how different DataTypes in Spark SQL are imported from line delimited json.</p>
+
+<p>The only one I really can&rsquo;t get working yet is the CalendarIntervalType.</p>
+
+<p>Looking at the Spark source files <a href="https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/literals.scala">literals.scala</a> and <a href="https://github.com/apache/spark/blob/master/common/unsafe/src/main/java/org/apache/spark/unsafe/types/CalendarInterval.java">CalendarInterval.java</a> I would assume that <code>CalendarInterval.fromString</code> is called with the value, however I&rsquo;m just getting nulls back currently when passing in a value like &lsquo;interval 2 days&rsquo; which when passed to <code>CalendarInterval.fromString</code> returns a non-null <code>CalendarInterval</code>.</p>
+
+<p>Results:
+```
+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; DecimalType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; DecimalType Input
+{&lsquo;decimal&rsquo;: 1.2345}
+{&lsquo;decimal&rsquo;: 1}
+{&lsquo;decimal&rsquo;: 234.231}
+{&lsquo;decimal&rsquo;: Infinity}
+{&lsquo;decimal&rsquo;: -Infinity}
+{&lsquo;decimal&rsquo;: NaN}
+{&lsquo;decimal&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;decimal&rsquo;: &lsquo;1.2345&rsquo;}
+{&lsquo;decimal&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; DecimalType Inferred Schema
+root
+ |&mdash; decimal: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|    decimal|
++&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|     1.2345|
+|          1|
+|    234.231|
+| &ldquo;Infinity&rdquo;|
+|&ldquo;-Infinity&rdquo;|
+|      &ldquo;NaN&rdquo;|
+|          1|
+|     1.2345|
+|       null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; DecimalType Set Schema
+root
+ |&mdash; decimal: decimal(6,3) (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&ndash;+
+|decimal|
++&mdash;&mdash;&mdash;&ndash;+
+|  1.235|
+|  1.000|
+|234.231|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
++&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; BooleanType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; BooleanType Input
+{&lsquo;boolean&rsquo;: true}
+{&lsquo;boolean&rsquo;: false}
+{&lsquo;boolean&rsquo;: &lsquo;false&rsquo;}
+{&lsquo;boolean&rsquo;: &lsquo;true&rsquo;}
+{&lsquo;boolean&rsquo;: null}
+{&lsquo;boolean&rsquo;: 1}
+{&lsquo;boolean&rsquo;: 0}
+{&lsquo;boolean&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;boolean&rsquo;: &lsquo;0&rsquo;}
+{&lsquo;boolean&rsquo;: &lsquo;a&rsquo;}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; BooleanType Inferred Schema
+root
+ |&mdash; boolean: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&ndash;+
+|boolean|
++&mdash;&mdash;&mdash;&ndash;+
+|   true|
+|  false|
+|  false|
+|   true|
+|   null|
+|      1|
+|      0|
+|      1|
+|      0|
+|      a|
++&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; BooleanType Set Schema
+root
+ |&mdash; boolean: boolean (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&ndash;+
+|boolean|
++&mdash;&mdash;&mdash;&ndash;+
+|   true|
+|  false|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
++&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; ByteType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; ByteType Input
+{&lsquo;byte&rsquo;: &lsquo;a&rsquo;}
+{&lsquo;byte&rsquo;: &lsquo;b&rsquo;}
+{&lsquo;byte&rsquo;: 1}
+{&lsquo;byte&rsquo;: 0}
+{&lsquo;byte&rsquo;: 5}
+{&lsquo;byte&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; ByteType Inferred Schema
+root
+ |&mdash; byte: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;+
+|byte|
++&mdash;&mdash;+
+|   a|
+|   b|
+|   1|
+|   0|
+|   5|
+|null|
++&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; ByteType Set Schema
+root
+ |&mdash; byte: byte (nullable = true)</p>
+
+<p>+&mdash;&mdash;+
+|byte|
++&mdash;&mdash;+
+|null|
+|null|
+|   1|
+|   0|
+|   5|
+|null|
++&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; CalendarIntervalType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; CalendarIntervalType Input
+{&lsquo;calendarInterval&rsquo;: &lsquo;interval 2 days&rsquo;}
+{&lsquo;calendarInterval&rsquo;: &lsquo;interval 1 week&rsquo;}
+{&lsquo;calendarInterval&rsquo;: &lsquo;interval 5 years&rsquo;}
+{&lsquo;calendarInterval&rsquo;: &lsquo;interval 6 months&rsquo;}
+{&lsquo;calendarInterval&rsquo;: 10}
+{&lsquo;calendarInterval&rsquo;: &lsquo;interval a&rsquo;}
+{&lsquo;calendarInterval&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; CalendarIntervalType Inferred Schema
+root
+ |&mdash; calendarInterval: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+| calendarInterval|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|  interval 2 days|
+|  interval 1 week|
+| interval 5 years|
+|interval 6 months|
+|               10|
+|       interval a|
+|             null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; CalendarIntervalType Set Schema
+root
+ |&mdash; calendarInterval: calendarinterval (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|calendarInterval|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; DateType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; DateType Input
+{&lsquo;date&rsquo;: &lsquo;2016-04-24&rsquo;}
+{&lsquo;date&rsquo;: &lsquo;0001-01-01&rsquo;}
+{&lsquo;date&rsquo;: &lsquo;9999-12-31&rsquo;}
+{&lsquo;date&rsquo;: &lsquo;2016-04-24 12:10:01&rsquo;}
+{&lsquo;date&rsquo;: 1461496201000}
+{&lsquo;date&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; DateType Inferred Schema
+root
+ |&mdash; date: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|               date|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|         2016-04-24|
+|         0001-01-01|
+|         9999-12-31|
+|2016-04-24 12:10:01|
+|      1461496201000|
+|               null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; DateType Set Schema
+root
+ |&mdash; date: date (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;+
+|      date|
++&mdash;&mdash;&mdash;&mdash;&mdash;+
+|2016-04-24|
+|0001-01-01|
+|9999-12-31|
+|2016-04-24|
+|      null|
+|      null|
++&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; DoubleType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; DoubleType Input
+{&lsquo;double&rsquo;: 1.23456}
+{&lsquo;double&rsquo;: 1}
+{&lsquo;double&rsquo;: 1.7976931348623157E308}
+{&lsquo;double&rsquo;: -1.7976931348623157E308}
+{&lsquo;double&rsquo;: Infinity}
+{&lsquo;double&rsquo;: -Infinity}
+{&lsquo;double&rsquo;: NaN}
+{&lsquo;double&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;double&rsquo;: &lsquo;1.23456&rsquo;}
+{&lsquo;double&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; DoubleType Inferred Schema
+root
+ |&mdash; double: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|              double|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|             1.23456|
+|                   1|
+|1.797693134862315&hellip;|
+|-1.79769313486231&hellip;|
+|          &ldquo;Infinity&rdquo;|
+|         &ldquo;-Infinity&rdquo;|
+|               &ldquo;NaN&rdquo;|
+|                   1|
+|             1.23456|
+|                null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; DoubleType Set Schema
+root
+ |&mdash; double: double (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|              double|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|             1.23456|
+|                 1.0|
+|1.797693134862315&hellip;|
+|-1.79769313486231&hellip;|
+|            Infinity|
+|           -Infinity|
+|                 NaN|
+|                null|
+|                null|
+|                null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; FloatType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; FloatType Input
+{&lsquo;float&rsquo;: 1.23456}
+{&lsquo;float&rsquo;: 1}
+{&lsquo;float&rsquo;: 3.4028235E38}
+{&lsquo;float&rsquo;: -3.4028235E38}
+{&lsquo;float&rsquo;: Infinity}
+{&lsquo;float&rsquo;: -Infinity}
+{&lsquo;float&rsquo;: NaN}
+{&lsquo;float&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;float&rsquo;: &lsquo;1.23456&rsquo;}
+{&lsquo;float&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; FloatType Inferred Schema
+root
+ |&mdash; float: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|        float|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|      1.23456|
+|            1|
+| 3.4028235E38|
+|-3.4028235E38|
+|   &ldquo;Infinity&rdquo;|
+|  &ldquo;-Infinity&rdquo;|
+|        &ldquo;NaN&rdquo;|
+|            1|
+|      1.23456|
+|         null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; FloatType Set Schema
+root
+ |&mdash; float: float (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|        float|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|      1.23456|
+|          1.0|
+| 3.4028235E38|
+|-3.4028235E38|
+|     Infinity|
+|    -Infinity|
+|          NaN|
+|         null|
+|         null|
+|         null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; IntegerType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; IntegerType Input
+{&lsquo;integer&rsquo;: 1}
+{&lsquo;integer&rsquo;: 2147483647}
+{&lsquo;integer&rsquo;: -2147483648}
+{&lsquo;integer&rsquo;: 2147483648}
+{&lsquo;integer&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;integer&rsquo;: 1.23456}
+{&lsquo;integer&rsquo;: &lsquo;1.23456&rsquo;}
+{&lsquo;integer&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; IntegerType Inferred Schema
+root
+ |&mdash; integer: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|    integer|
++&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|          1|
+| 2147483647|
+|-2147483648|
+| 2147483648|
+|          1|
+|    1.23456|
+|    1.23456|
+|       null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; IntegerType Set Schema
+root
+ |&mdash; integer: integer (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|    integer|
++&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|          1|
+| 2147483647|
+|-2147483648|
+|       null|
+|       null|
+|       null|
+|       null|
+|       null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; LongType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; LongType Input
+{&lsquo;long&rsquo;: 1}
+{&lsquo;long&rsquo;: 9223372036854775807}
+{&lsquo;long&rsquo;: -9223372036854775808}
+{&lsquo;long&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;long&rsquo;: 1.23456}
+{&lsquo;long&rsquo;: &lsquo;1.23456&rsquo;}
+{&lsquo;long&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; LongType Inferred Schema
+root
+ |&mdash; long: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|                long|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|                   1|
+| 9223372036854775807|
+|-9223372036854775808|
+|                   1|
+|             1.23456|
+|             1.23456|
+|                null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; LongType Set Schema
+root
+ |&mdash; long: long (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|                long|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|                   1|
+| 9223372036854775807|
+|-9223372036854775808|
+|                null|
+|                null|
+|                null|
+|                null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; MapType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; MapType Input
+{&lsquo;map&rsquo;: {&lsquo;a_key&rsquo;: &lsquo;a value&rsquo;, &lsquo;b_key&rsquo;: &lsquo;b value&rsquo;}}
+{&lsquo;map&rsquo;: {&lsquo;key&rsquo;: 1, &lsquo;key1&rsquo;: null}}
+{&lsquo;map&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; MapType Inferred Schema
+root
+ |&mdash; map: struct (nullable = true)
+ |    |&mdash; a_key: string (nullable = true)
+ |    |&mdash; b_key: string (nullable = true)
+ |    |&mdash; key: long (nullable = true)
+ |    |&mdash; key1: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|                 map|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|[a value,b value,&hellip;|
+|  [null,null,1,null]|
+|                null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; MapType Set Schema
+root
+ |&mdash; map: map (nullable = true)
+ |    |&mdash; key: string
+ |    |&mdash; value: string (valueContainsNull = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|                 map|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|Map(a_key &ndash;> a va&hellip;|
+|Map(key &ndash;> 1, key&hellip;|
+|                null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; NullType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; NullType Input
+{&lsquo;null&rsquo;: null}
+{&lsquo;null&rsquo;: true}
+{&lsquo;null&rsquo;: false}
+{&lsquo;null&rsquo;: 1}
+{&lsquo;null&rsquo;: 0}
+{&lsquo;null&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;null&rsquo;: &lsquo;0&rsquo;}
+{&lsquo;null&rsquo;: &lsquo;a&rsquo;}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; NullType Inferred Schema
+root
+ |&mdash; null: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&ndash;+
+| null|
++&mdash;&mdash;&ndash;+
+| null|
+| true|
+|false|
+|    1|
+|    0|
+|    1|
+|    0|
+|    a|
++&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; NullType Set Schema
+root
+ |&mdash; null: null (nullable = true)</p>
+
+<p>+&mdash;&mdash;+
+|null|
++&mdash;&mdash;+
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
++&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; ShortType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; ShortType Input
+{&lsquo;short&rsquo;: 0}
+{&lsquo;short&rsquo;: 1}
+{&lsquo;short&rsquo;: 32767}
+{&lsquo;short&rsquo;: -32768}
+{&lsquo;short&rsquo;: 32768}
+{&lsquo;short&rsquo;: 1.23456}
+{&lsquo;short&rsquo;: &lsquo;0&rsquo;}
+{&lsquo;short&rsquo;: &lsquo;1&rsquo;}
+{&lsquo;short&rsquo;: &lsquo;1.23456&rsquo;}
+{&lsquo;short&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; ShortType Inferred Schema
+root
+ |&mdash; short: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&ndash;+
+|  short|
++&mdash;&mdash;&mdash;&ndash;+
+|      0|
+|      1|
+|  32767|
+| -32768|
+|  32768|
+|1.23456|
+|      0|
+|      1|
+|1.23456|
+|   null|
++&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; ShortType Set Schema
+root
+ |&mdash; short: short (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;+
+| short|
++&mdash;&mdash;&mdash;+
+|     0|
+|     1|
+| 32767|
+|-32768|
+|  null|
+|  null|
+|  null|
+|  null|
+|  null|
+|  null|
++&mdash;&mdash;&mdash;+</p>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; TimestampType &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+&mdash;&mdash;&mdash;&ndash; TimestampType Input
+{&lsquo;timestamp&rsquo;: &lsquo;2016-04-24&rsquo;}
+{&lsquo;timestamp&rsquo;: &lsquo;2016-04-24 12:10:01&rsquo;}
+{&lsquo;timestamp&rsquo;: 1461496201000}
+{&lsquo;timestamp&rsquo;: &lsquo;0001-01-01&rsquo;}
+{&lsquo;timestamp&rsquo;: &lsquo;9999-12-31&rsquo;}
+{&lsquo;timestamp&rsquo;: null}</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; TimestampType Inferred Schema
+root
+ |&mdash; timestamp: string (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|          timestamp|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+
+|         2016-04-24|
+|2016-04-24 12:10:01|
+|      1461496201000|
+|         0001-01-01|
+|         9999-12-31|
+|               null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+</p>
+
+<p>&mdash;&mdash;&mdash;&ndash; TimestampType Set Schema
+root
+ |&mdash; timestamp: timestamp (nullable = true)</p>
+
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|           timestamp|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|2016-04-24 00:00:&hellip;|
+|2016-04-24 12:10:&hellip;|
+|2016-04-24 12:10:&hellip;|
+|0001-01-01 00:00:&hellip;|
+|9999-12-31 00:00:&hellip;|
+|                null|
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+
+<p>```</p>
+]]></content>
+  </entry>
+  
+</feed>

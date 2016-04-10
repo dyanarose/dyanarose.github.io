@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Neo4j | These Things Happen]]></title>
+  <link href="http://dyanarose.github.io/blog/categories/neo4j/atom.xml" rel="self"/>
+  <link href="http://dyanarose.github.io/"/>
+  <updated>2016-04-10T15:52:01+01:00</updated>
+  <id>http://dyanarose.github.io/</id>
+  <author>
+    <name><![CDATA[Dyana Rose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Preventing Duplication When Creating Relationships in Neo4j]]></title>
+    <link href="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
+    <updated>2014-07-08T20:50:10+01:00</updated>
+    <id>http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id>
+    <content type="html"><![CDATA[<p>Creating relationships between known nodes using Cypher in Neo4j is simple.</p>
+
+<pre><code>MATCH (p:Person), (e:Episode)
+CREATE (p) - [:INTERVIEWED_IN] -&gt; (e)
+</code></pre>
+
+<p>But what it you don&rsquo;t know if one of the nodes exists? And further, what if you don&rsquo;t know if the relationship itself already exists?</p>
+
+<ul>
+<li>If the node doesn&rsquo;t exist, I want it to be created.</li>
+<li>If the relationship doesn&rsquo;t exist, I want it to be created.</li>
+<li>If both node and relationship exist, then nothing should be changed</li>
+</ul>
+
+
+<p>The simple scenario is of a set of Episode nodes and a set of Person nodes.</p>
+
+<pre><code>CREATE (e:Episode {title:"foo", subtitle:"bar"})
+return e
+CREATE (p:Person {name:"Lynn Rose"})
+return p
+</code></pre>
+
+<p>The Episode nodes are known to exist. The Person nodes may or may not exist.</p>
+
+<p>My first attempts at getting this right in my working database were tragic failures.
+For example, the following, while working as intended in a new 2.0.1 database, fails and causes duplicate person nodes in my working database. (Adding a unique constraint on person.name causes the statement to throw an exception rather than create a duplicate)</p>
+
+<pre><code>MATCH (e:Episode {title: "foo"})
+CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p:Person {name:"Lynn Rose"})
+</code></pre>
+
+<p>As I said, the duplication doesn&rsquo;t happen in a clean 2.0.1 database, so the problem must be with my working database.</p>
+
+<ol>
+<li>The database was originally created on Neo4j 1.9.3 and is now running under Neo4j 2.0.1</li>
+<li>The nodes created before the release of 2.x use the old style indexes.</li>
+</ol>
+
+
+<p>But those facts aside, I still need to stop the duplication! So back to the <a href="http://docs.neo4j.org/chunked/stable/cypher-query-lang.html">Cypher documentation</a>.</p>
+
+<p>The Cypher documents for <a href="http://docs.neo4j.org/chunked/stable/query-create-unique.html">CREATE UNIQUE</a>  specify the following in a call out box:</p>
+
+<blockquote><p>  <a href="http://docs.neo4j.org/chunked/stable/query-merge.html">MERGE</a> might be what you want to use instead of CREATE UNIQUE</p></blockquote>
+
+<p>It&rsquo;s MERGE that gives the ability to control what happens when a node is, or isn&rsquo;t, matched. It does this through the syntax of ON MATCH and ON CREATE.</p>
+
+<p>Using MERGE and ON CREATE I can get a handle on an existing person node to be able to use in our relationship creation, thus preventing duplication of person nodes.</p>
+
+<pre><code>MATCH (e:Episode {title: "foo"})
+MERGE (p:Person {name: "Lynn Rose"})
+ON CREATE SET p.firstname = "Lynn", p.surname = "Rose"
+MERGE (e) &lt;- [:INTERVIEWED_IN] - (p)
+</code></pre>
+
+<p>But, we&rsquo;ve still got an issue here. This doesn&rsquo;t necessarily solve the problem of duplicating relationships.</p>
+
+<p>In that call out box in the CREATE UNIQUE documentation, it goes on to say:</p>
+
+<blockquote><p>  Note however, that MERGE doesn&rsquo;t give as strong guarantees for relationships being unique.</p></blockquote>
+
+<p>So I take from this that I should use MERGE to prevent node duplication, but CREATE UNIQUE should be used to prevent relationship duplication.</p>
+
+<pre><code>MATCH (e:Episode {title: "foo"})
+MERGE (p:Person {name: "Lynn Rose"})
+ON CREATE SET p.firstname = "Lynn", p.surname = "Rose"
+CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
+</code></pre>
+
+<p>And here we are.</p>
+
+<ul>
+<li>If the node doesn&rsquo;t exist, it is created using MERGE ON CREATE.</li>
+<li>If the relationship doesn&rsquo;t exist, it is created using CREATE UNIQUE.</li>
+<li>If both node and relationship exist, then nothing is changed.</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>
