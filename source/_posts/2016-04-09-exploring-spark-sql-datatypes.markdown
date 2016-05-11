@@ -1,17 +1,19 @@
 ---
 layout: post
-title: "Understanding the different Sparl SQL DataTypes"
+title: "Exploring Spark SQL DataTypes"
 date: 2016-04-09 12:57:06 +0100
 comments: false
 categories: [Apache Spark, Spark SQL]
 published: true
 ---
 
-Exploring how different DataTypes in Spark SQL are imported from line delimited json. 
+I've been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I'm converting to parquet files. The data won't all be processed at once and the schema will need to grow, so it's imperative that the parquet files have schemas that are compatible.
 
 The only one I really can't get working yet is the CalendarIntervalType.  
 
-Looking at the Spark source files [literals.scala](https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/literals.scala) and [CalendarInterval.java](https://github.com/apache/spark/blob/master/common/unsafe/src/main/java/org/apache/spark/unsafe/types/CalendarInterval.java) I would assume that `CalendarInterval.fromString` is called with the value, however I'm just getting nulls back currently when passing in a value like 'interval 2 days' which when passed to `CalendarInterval.fromString` returns a non-null `CalendarInterval`.
+Looking at the Spark source files [literals.scala](https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/literals.scala) and [CalendarInterval.java](https://github.com/apache/spark/blob/master/common/unsafe/src/main/java/org/apache/spark/unsafe/types/CalendarInterval.java) I would assume that `CalendarInterval.fromString` is called with the value, however I'm just getting nulls back when passing in a value like 'interval 2 days' which, when passed to `CalendarInterval.fromString`, returns a non-null `CalendarInterval`.
+
+Source code for the tests is at: https://github.com/dyanarose/dlr-spark
 
 Results:
 ```
