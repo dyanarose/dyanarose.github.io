@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[These Things Happen]]></title>
-  <link href="http://dyanarose.github.io/atom.xml" rel="self"/>
-  <link href="http://dyanarose.github.io/"/>
-  <updated>2016-05-11T21:24:31+01:00</updated>
-  <id>http://dyanarose.github.io/</id>
+  <link href="http://dyanarose.github.io/github/atom.xml" rel="self"/>
+  <link href="http://dyanarose.github.io/github/"/>
+  <updated>2017-08-04T16:17:55+01:00</updated>
+  <id>http://dyanarose.github.io/github/</id>
   <author>
     <name><![CDATA[Dyana Rose]]></name>
     
@@ -14,10 +14,414 @@
 
   
   <entry>
+    <title type="html"><![CDATA[So You Need to Edit Data in a Parquet File]]></title>
+    <link href="http://dyanarose.github.io/github/blog/2017/08/04/so-you-need-to-edit-data-in-a-parquet-file/"/>
+    <updated>2017-08-04T11:40:32+01:00</updated>
+    <id>http://dyanarose.github.io/github/blog/2017/08/04/so-you-need-to-edit-data-in-a-parquet-file</id>
+    <content type="html"><![CDATA[<p>You&rsquo;ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. Lucky for you, you know what changes you need to make to correct the data, but how do you do it?</p>
+
+<p>tl;dr: <a href="https://github.com/dyanarose/parquet-edit-examples">spark-edit-examples</a></p>
+
+<h3>It&rsquo;s all immutable</h3>
+
+<p>Our data is immutable.</p>
+
+<p>Parquet files are append only. Spark DataFrames are immutable. But we need to mutate that data.</p>
+
+<p>And we can, we just need to accept that we won&rsquo;t be doing it in place. We will need to recreate the Parquet files and use Spark Schemas and UDFs to modify the troublesome data spots.</p>
+
+<h2>Schemas</h2>
+
+<p>When you read data into a Spark DataFrame, you can provide a schema.</p>
+
+<h4>Case 1: I need to drop an entire column</h4>
+
+<p>To drop an entire column, read the data in with a schema that doesn&rsquo;t contain that column. When you write the DataFrame back out, the column will no longer exist</p>
+
+<p><a href="https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/ColumnTransform.scala">ColumnTransform.scala</a></p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">ColumnTransform</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">transform</span><span class="o">(</span><span class="n">spark</span><span class="k">:</span> <span class="kt">SparkSession</span><span class="o">,</span> <span class="n">sourcePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">destPath</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// read in the data with a new schema</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">allGoodData</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">schema</span><span class="o">(</span><span class="nc">ColumnDropSchema</span><span class="o">.</span><span class="n">schema</span><span class="o">).</span><span class="n">parquet</span><span class="o">(</span><span class="n">sourcePath</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// write out the final edited data</span>
+</span><span class='line'>    <span class="n">allGoodData</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="n">parquet</span><span class="o">(</span><span class="n">destPath</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>Case 2: I need to drop full rows of data</h4>
+
+<p>To drop full rows, read in the data and select the data you want to save into a new DataFrame using a where clause. When you write the new DataFrame it will only have the rows that match the where clause.</p>
+
+<p><a href="https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/WhereTransform.scala">WhereTransform.scala</a></p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">WhereTransform</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">transform</span><span class="o">(</span><span class="n">spark</span><span class="k">:</span> <span class="kt">SparkSession</span><span class="o">,</span> <span class="n">sourcePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">destPath</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">originalData</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">schema</span><span class="o">(</span><span class="nc">RawDataSchema</span><span class="o">.</span><span class="n">schema</span><span class="o">).</span><span class="n">parquet</span><span class="o">(</span><span class="n">sourcePath</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// select only the good data rows</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">allGoodData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myField is null&quot;</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// write out the final edited data</span>
+</span><span class='line'>    <span class="n">allGoodData</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="n">parquet</span><span class="o">(</span><span class="n">destPath</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>User Defined Functions (UDFs)</h2>
+
+<p><a href="https://blog.cloudera.com/blog/2017/02/working-with-udfs-in-apache-spark/">UDFs in Spark</a> are used to apply functions to a row of data. The result of the UDF becomes the field value.</p>
+
+<h4>Case 3: I need to edit the value of a simple type (String, Boolean, &hellip;)</h4>
+
+<p>To edit a simple type you first need to create a function that takes and returns the same type.</p>
+
+<p>This function is then registered for use as a UDF and it can then be applied to a field in a select clause</p>
+
+<p>Note that when using UDFs you must alias the resultant column otherwise it will end up renamed to something like UDF(fieldName)</p>
+
+<p><a href="https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/SimpleTransform.scala">SimpleTransform.scala</a></p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">SimpleTransform</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">transform</span><span class="o">(</span><span class="n">spark</span><span class="k">:</span> <span class="kt">SparkSession</span><span class="o">,</span> <span class="n">sourcePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">destPath</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">originalData</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">schema</span><span class="o">(</span><span class="nc">RawDataSchema</span><span class="o">.</span><span class="n">schema</span><span class="o">).</span><span class="n">parquet</span><span class="o">(</span><span class="n">sourcePath</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// take in a String, return a String</span>
+</span><span class='line'>    <span class="c1">// cleanFunc will simply take the StringType field value and return the empty string in its place</span>
+</span><span class='line'>    <span class="c1">// you can interrogate the value and return any StringType here</span>
+</span><span class='line'>    <span class="k">def</span> <span class="n">cleanFunc</span><span class="k">:</span> <span class="o">(</span><span class="kt">String</span> <span class="o">=&gt;</span> <span class="kt">String</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="s">&quot;&quot;</span> <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// register the func as a udf</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">clean</span> <span class="k">=</span> <span class="n">udf</span><span class="o">(</span><span class="n">cleanFunc</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// required for the $ column syntax</span>
+</span><span class='line'>    <span class="k">import</span> <span class="nn">spark.sqlContext.implicits._</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// if you have data that doesn&#39;t need editing, you can separate it out</span>
+</span><span class='line'>    <span class="c1">// The data will need to be in a form that can be unioned with the edited data</span>
+</span><span class='line'>    <span class="c1">// I do that here by selecting out all the fields.</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">alreadyGoodData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myField is null&quot;</span><span class="o">).</span><span class="n">select</span><span class="o">(</span>
+</span><span class='line'>      <span class="nc">Seq</span><span class="o">[</span><span class="kt">Column</span><span class="o">](</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myField&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myMap&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myStruct&quot;</span>
+</span><span class='line'>      <span class="o">)</span><span class="k">:_</span><span class="kt">*</span>
+</span><span class='line'>    <span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// apply the udf to the fields that need editing</span>
+</span><span class='line'>    <span class="c1">// selecting out all the data that will be present in the final parquet file</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">transformedData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myField is not null&quot;</span><span class="o">).</span><span class="n">select</span><span class="o">(</span>
+</span><span class='line'>      <span class="nc">Seq</span><span class="o">[</span><span class="kt">Column</span><span class="o">](</span>
+</span><span class='line'>        <span class="n">clean</span><span class="o">(</span><span class="n">$</span><span class="s">&quot;myField&quot;</span><span class="o">).</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;myField&quot;</span><span class="o">),</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myMap&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myStruct&quot;</span>
+</span><span class='line'>      <span class="o">)</span><span class="k">:_</span><span class="kt">*</span>
+</span><span class='line'>    <span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// union the two DataFrames</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">allGoodData</span> <span class="k">=</span> <span class="n">alreadyGoodData</span><span class="o">.</span><span class="n">union</span><span class="o">(</span><span class="n">transformedData</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// write out the final edited data</span>
+</span><span class='line'>    <span class="n">allGoodData</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="n">parquet</span><span class="o">(</span><span class="n">destPath</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>Case 4: I need to edit the value of a MapType</h4>
+
+<p>MapTypes follow the same pattern as simple types. You write a function that takes a Map of the correct key and value types and returns a Map of the same types.</p>
+
+<p>In the following example, an entire entry in the Map[String,String] is removed from the final data by filtering on the keyset.</p>
+
+<p><a href="https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/MapTypeTransform.scala">MapTypeTransform.scala</a></p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">MapTypeTransform</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">transform</span><span class="o">(</span><span class="n">spark</span><span class="k">:</span> <span class="kt">SparkSession</span><span class="o">,</span> <span class="n">sourcePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">destPath</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">originalData</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">schema</span><span class="o">(</span><span class="nc">RawDataSchema</span><span class="o">.</span><span class="n">schema</span><span class="o">).</span><span class="n">parquet</span><span class="o">(</span><span class="n">sourcePath</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// cleanFunc will simply take the MapType and return an edited Map</span>
+</span><span class='line'>    <span class="c1">// in this example it removes one member of the map before returning</span>
+</span><span class='line'>    <span class="k">def</span> <span class="n">cleanFunc</span><span class="k">:</span> <span class="o">(</span><span class="kt">Map</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">String</span><span class="o">]</span> <span class="o">=&gt;</span> <span class="nc">Map</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">String</span><span class="o">])</span> <span class="k">=</span> <span class="o">{</span> <span class="n">m</span> <span class="k">=&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">filterKeys</span><span class="o">(</span><span class="n">k</span> <span class="k">=&gt;</span> <span class="n">k</span> <span class="o">!=</span> <span class="s">&quot;editMe&quot;</span><span class="o">)</span> <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// register the func as a udf</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">clean</span> <span class="k">=</span> <span class="n">udf</span><span class="o">(</span><span class="n">cleanFunc</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// required for the $ column syntax</span>
+</span><span class='line'>    <span class="k">import</span> <span class="nn">spark.sqlContext.implicits._</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// if you have data that doesn&#39;t need editing, you can separate it out</span>
+</span><span class='line'>    <span class="c1">// The data will need to be in a form that can be unioned with the edited data</span>
+</span><span class='line'>    <span class="c1">// I do that here by selecting out all the fields.</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">alreadyGoodData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myMap.editMe is null&quot;</span><span class="o">).</span><span class="n">select</span><span class="o">(</span>
+</span><span class='line'>      <span class="nc">Seq</span><span class="o">[</span><span class="kt">Column</span><span class="o">](</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myField&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myMap&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myStruct&quot;</span>
+</span><span class='line'>      <span class="o">)</span><span class="k">:_</span><span class="kt">*</span>
+</span><span class='line'>    <span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// apply the udf to the fields that need editing</span>
+</span><span class='line'>    <span class="c1">// selecting out all the data that will be present in the final parquet file</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">transformedData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myMap.editMe is not null&quot;</span><span class="o">).</span><span class="n">select</span><span class="o">(</span>
+</span><span class='line'>      <span class="nc">Seq</span><span class="o">[</span><span class="kt">Column</span><span class="o">](</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myField&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">clean</span><span class="o">(</span><span class="n">$</span><span class="s">&quot;myMap&quot;</span><span class="o">).</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;myMap&quot;</span><span class="o">),</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myStruct&quot;</span>
+</span><span class='line'>      <span class="o">)</span><span class="k">:_</span><span class="kt">*</span>
+</span><span class='line'>    <span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// union the two DataFrames</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">allGoodData</span> <span class="k">=</span> <span class="n">alreadyGoodData</span><span class="o">.</span><span class="n">union</span><span class="o">(</span><span class="n">transformedData</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// write out the final edited data</span>
+</span><span class='line'>    <span class="n">allGoodData</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="n">parquet</span><span class="o">(</span><span class="n">destPath</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>Case 5: I need to change the value of a member of a StructType</h4>
+
+<p>Working with StructTypes requires an addition to the UDF registration statement. By supplying the schema of the StructType you are able to manipulate using a function that takes and returns a Row.</p>
+
+<p>As Rows are immutable, a new Row must be created that has the same field order, type, and number as the schema. But, since the schema of the data is known, it&rsquo;s relatively easy to reconstruct a new Row with the correct fields.</p>
+
+<p><a href="https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/StructTypeTransform.scala">StructTypeTransform.scala</a></p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">StructTypeTransform</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">transform</span><span class="o">(</span><span class="n">spark</span><span class="k">:</span> <span class="kt">SparkSession</span><span class="o">,</span> <span class="n">sourcePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">destPath</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">originalData</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">schema</span><span class="o">(</span><span class="nc">RawDataSchema</span><span class="o">.</span><span class="n">schema</span><span class="o">).</span><span class="n">parquet</span><span class="o">(</span><span class="n">sourcePath</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// cleanFunc will take the struct as a Row and return a new Row with edited fields</span>
+</span><span class='line'>    <span class="c1">// note that the ordering and count of the fields must remain the same</span>
+</span><span class='line'>    <span class="k">def</span> <span class="n">cleanFunc</span><span class="k">:</span> <span class="o">(</span><span class="kt">Row</span> <span class="o">=&gt;</span> <span class="kt">Row</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span> <span class="n">r</span> <span class="k">=&gt;</span> <span class="nc">RowFactory</span><span class="o">.</span><span class="n">create</span><span class="o">(</span><span class="n">r</span><span class="o">.</span><span class="n">getAs</span><span class="o">[</span><span class="kt">BooleanType</span><span class="o">](</span><span class="mi">0</span><span class="o">),</span> <span class="s">&quot;&quot;</span><span class="o">)</span> <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// register the func as a udf</span>
+</span><span class='line'>    <span class="c1">// give the UDF a schema or the Row type won&#39;t be supported</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">clean</span> <span class="k">=</span> <span class="n">udf</span><span class="o">(</span><span class="n">cleanFunc</span><span class="o">,</span>
+</span><span class='line'>      <span class="nc">StructType</span><span class="o">(</span>
+</span><span class='line'>        <span class="nc">StructField</span><span class="o">(</span><span class="s">&quot;myField&quot;</span><span class="o">,</span> <span class="nc">BooleanType</span><span class="o">,</span> <span class="kc">true</span><span class="o">)</span> <span class="o">::</span>
+</span><span class='line'>          <span class="nc">StructField</span><span class="o">(</span><span class="s">&quot;editMe&quot;</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span> <span class="kc">true</span><span class="o">)</span> <span class="o">::</span>
+</span><span class='line'>          <span class="nc">Nil</span>
+</span><span class='line'>      <span class="o">)</span>
+</span><span class='line'>    <span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// required for the $ column syntax</span>
+</span><span class='line'>    <span class="k">import</span> <span class="nn">spark.sqlContext.implicits._</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// if you have data that doesn&#39;t need editing, you can separate it out</span>
+</span><span class='line'>    <span class="c1">// The data will need to be in a form that can be unioned with the edited data</span>
+</span><span class='line'>    <span class="c1">// I do that here by selecting out all the fields.</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">alreadyGoodData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myStruct.editMe is null&quot;</span><span class="o">).</span><span class="n">select</span><span class="o">(</span>
+</span><span class='line'>      <span class="nc">Seq</span><span class="o">[</span><span class="kt">Column</span><span class="o">](</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myField&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myStruct&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myMap&quot;</span>
+</span><span class='line'>      <span class="o">)</span><span class="k">:_</span><span class="kt">*</span>
+</span><span class='line'>    <span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// apply the udf to the fields that need editing</span>
+</span><span class='line'>    <span class="c1">// selecting out all the data that will be present in the final parquet file</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">transformedData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myStruct.editMe is not null&quot;</span><span class="o">).</span><span class="n">select</span><span class="o">(</span>
+</span><span class='line'>      <span class="nc">Seq</span><span class="o">[</span><span class="kt">Column</span><span class="o">](</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myField&quot;</span><span class="o">,</span>
+</span><span class='line'>        <span class="n">clean</span><span class="o">(</span><span class="n">$</span><span class="s">&quot;myStruct&quot;</span><span class="o">).</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;myStruct&quot;</span><span class="o">),</span>
+</span><span class='line'>        <span class="n">$</span><span class="s">&quot;myMap&quot;</span>
+</span><span class='line'>      <span class="o">)</span><span class="k">:_</span><span class="kt">*</span>
+</span><span class='line'>    <span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// union the two DataFrames</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">allGoodData</span> <span class="k">=</span> <span class="n">alreadyGoodData</span><span class="o">.</span><span class="n">union</span><span class="o">(</span><span class="n">transformedData</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// write out the final edited data</span>
+</span><span class='line'>    <span class="n">allGoodData</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="n">parquet</span><span class="o">(</span><span class="n">destPath</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Finally</h3>
+
+<p>Always test your transforms! Who wants to delete data only to find out their transform failed?</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[Exploring Spark SQL DataTypes]]></title>
-    <link href="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/"/>
+    <link href="http://dyanarose.github.io/github/blog/2016/04/09/exploring-spark-sql-datatypes/"/>
     <updated>2016-04-09T12:57:06+01:00</updated>
-    <id>http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes</id>
+    <id>http://dyanarose.github.io/github/blog/2016/04/09/exploring-spark-sql-datatypes</id>
     <content type="html"><![CDATA[<p>I&rsquo;ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I&rsquo;m converting to parquet files. The data won&rsquo;t all be processed at once and the schema will need to grow, so it&rsquo;s imperative that the parquet files have schemas that are compatible.</p>
 
 <p>The only one I really can&rsquo;t get working yet is the CalendarIntervalType.</p>
@@ -1271,9 +1675,9 @@
   
   <entry>
     <title type="html"><![CDATA[Preventing Duplication When Creating Relationships in Neo4j]]></title>
-    <link href="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
+    <link href="http://dyanarose.github.io/github/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
     <updated>2014-07-08T20:50:10+01:00</updated>
-    <id>http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id>
+    <id>http://dyanarose.github.io/github/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id>
     <content type="html"><![CDATA[<p>Creating relationships between known nodes using Cypher in Neo4j is simple.</p>
 
 <pre><code>MATCH (p:Person), (e:Episode)
