@@ -4,7 +4,7 @@
   <title><![CDATA[These Things Happen]]></title>
   <link href="http://dyanarose.github.io/github/atom.xml" rel="self"/>
   <link href="http://dyanarose.github.io/github/"/>
-  <updated>2017-08-06T15:50:23+01:00</updated>
+  <updated>2017-08-06T15:56:10+01:00</updated>
   <id>http://dyanarose.github.io/github/</id>
   <author>
     <name><![CDATA[Dyana Rose]]></name>
@@ -14,10 +14,10 @@
 
   
   <entry>
-    <title type="html"><![CDATA[So You Need to Edit Data in a Parquet File]]></title>
-    <link href="http://dyanarose.github.io/github/blog/2017/08/04/so-you-need-to-edit-data-in-a-parquet-file/"/>
+    <title type="html"><![CDATA[So You Need to Edit a Parquet File]]></title>
+    <link href="http://dyanarose.github.io/github/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/"/>
     <updated>2017-08-04T11:40:32+01:00</updated>
-    <id>http://dyanarose.github.io/github/blog/2017/08/04/so-you-need-to-edit-data-in-a-parquet-file</id>
+    <id>http://dyanarose.github.io/github/blog/2017/08/04/so-you-need-to-edit-a-parquet-file</id>
     <content type="html"><![CDATA[<p>You&rsquo;ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?</p>
 
 <p>tl;dr: <a href="https://github.com/dyanarose/parquet-edit-examples">spark-edit-examples</a></p>
