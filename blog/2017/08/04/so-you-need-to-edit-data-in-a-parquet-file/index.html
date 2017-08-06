@@ -39,7 +39,7 @@
   <header role="banner"><hgroup>
   <h1><a href="/">These Things Happen</a></h1>
   
-    <h2>read at your own risk</h2>
+    <h2>fixing bugs and chewing bubblegum</h2>
   
 </hgroup>
 
@@ -93,21 +93,21 @@
   </header>
 
 
-<div class="entry-content"><p>You&rsquo;ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. Lucky for you, you know what changes you need to make to correct the data, but how do you do it?</p>
+<div class="entry-content"><p>You&rsquo;ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?</p>
 
 <p>tl;dr: <a href="https://github.com/dyanarose/parquet-edit-examples">spark-edit-examples</a></p>
 
 <h3>It&rsquo;s all immutable</h3>
 
-<p>Our data is immutable.</p>
+<p>The problem we have when we need to edit the data is that our data structures are immutable.</p>
 
-<p>Parquet files are append only. Spark DataFrames are immutable. But we need to mutate that data.</p>
+<p>You can add partitions to Parquet files, but you can&rsquo;t edit the data in place. Spark DataFrames are immutable.</p>
 
-<p>And we can, we just need to accept that we won&rsquo;t be doing it in place. We will need to recreate the Parquet files and use Spark Schemas and UDFs to modify the troublesome data spots.</p>
+<p>But ultimately we can mutate the data, we just need to accept that we won&rsquo;t be doing it in place. We will need to recreate the Parquet files using a combination of schemas and UDFs to correct the bad data.</p>
 
 <h2>Schemas</h2>
 
-<p>When you read data into a Spark DataFrame, you can provide a schema.</p>
+<p>Reading in data using a schema gives you a lot of power over the resultant structure of the DataFrame (not to mention it makes reading in json files a lot faster, and will allow you to union compatible Parquet files)</p>
 
 <h4>Case 1: I need to drop an entire column</h4>
 
@@ -177,13 +177,13 @@
 
 <p><a href="https://blog.cloudera.com/blog/2017/02/working-with-udfs-in-apache-spark/">UDFs in Spark</a> are used to apply functions to a row of data. The result of the UDF becomes the field value.</p>
 
+<p>Note that when using UDFs you must alias the resultant column otherwise it will end up renamed similar to <code>UDF(fieldName)</code></p>
+
 <h4>Case 3: I need to edit the value of a simple type (String, Boolean, &hellip;)</h4>
 
 <p>To edit a simple type you first need to create a function that takes and returns the same type.</p>
 
 <p>This function is then registered for use as a UDF and it can then be applied to a field in a select clause</p>
-
-<p>Note that when using UDFs you must alias the resultant column otherwise it will end up renamed to something like UDF(fieldName)</p>
 
 <p><a href="https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/SimpleTransform.scala">SimpleTransform.scala</a></p>
 
@@ -237,8 +237,8 @@
 </span><span class='line'>    <span class="k">val</span> <span class="n">originalData</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">schema</span><span class="o">(</span><span class="nc">RawDataSchema</span><span class="o">.</span><span class="n">schema</span><span class="o">).</span><span class="n">parquet</span><span class="o">(</span><span class="n">sourcePath</span><span class="o">)</span>
 </span><span class='line'>
 </span><span class='line'>    <span class="c1">// take in a String, return a String</span>
-</span><span class='line'>    <span class="c1">// cleanFunc will simply take the StringType field value and return the empty string in its place</span>
-</span><span class='line'>    <span class="c1">// you can interrogate the value and return any StringType here</span>
+</span><span class='line'>    <span class="c1">// cleanFunc takes the String field value and return the empty string in its place</span>
+</span><span class='line'>    <span class="c1">// you can interrogate the value and return any String here</span>
 </span><span class='line'>    <span class="k">def</span> <span class="n">cleanFunc</span><span class="k">:</span> <span class="o">(</span><span class="kt">String</span> <span class="o">=&gt;</span> <span class="kt">String</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="s">&quot;&quot;</span> <span class="o">}</span>
 </span><span class='line'>
 </span><span class='line'>    <span class="c1">// register the func as a udf</span>
@@ -249,7 +249,7 @@
 </span><span class='line'>
 </span><span class='line'>    <span class="c1">// if you have data that doesn&#39;t need editing, you can separate it out</span>
 </span><span class='line'>    <span class="c1">// The data will need to be in a form that can be unioned with the edited data</span>
-</span><span class='line'>    <span class="c1">// I do that here by selecting out all the fields.</span>
+</span><span class='line'>    <span class="c1">// That can be done by selecting out the fields in the same way in both the good and transformed data sets.</span>
 </span><span class='line'>    <span class="k">val</span> <span class="n">alreadyGoodData</span> <span class="k">=</span> <span class="n">originalData</span><span class="o">.</span><span class="n">where</span><span class="o">(</span><span class="s">&quot;myField is null&quot;</span><span class="o">).</span><span class="n">select</span><span class="o">(</span>
 </span><span class='line'>      <span class="nc">Seq</span><span class="o">[</span><span class="kt">Column</span><span class="o">](</span>
 </span><span class='line'>        <span class="n">$</span><span class="s">&quot;myField&quot;</span><span class="o">,</span>
@@ -488,7 +488,7 @@
 
 <h3>Finally</h3>
 
-<p>Always test your transforms! Who wants to delete data only to find out their transform failed?</p>
+<p>Always test your transforms before you delete the original data!</p>
 </div>
 
 
