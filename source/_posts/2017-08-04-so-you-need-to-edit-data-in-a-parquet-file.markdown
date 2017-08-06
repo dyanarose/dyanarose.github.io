@@ -7,21 +7,21 @@ categories:
 published: true
 ---
 
-You've uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. Lucky for you, you know what changes you need to make to correct the data, but how do you do it?
+You've uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?
 
 tl;dr: [spark-edit-examples](https://github.com/dyanarose/parquet-edit-examples)
 
 ### It's all immutable
 
-Our data is immutable.
+The problem we have when we need to edit the data is that our data structures are immutable.
 
-Parquet files are append only. Spark DataFrames are immutable. But we need to mutate that data.
+You can add partitions to Parquet files, but you can't edit the data in place. Spark DataFrames are immutable.
 
-And we can, we just need to accept that we won't be doing it in place. We will need to recreate the Parquet files and use Spark Schemas and UDFs to modify the troublesome data spots.
+But ultimately we can mutate the data, we just need to accept that we won't be doing it in place. We will need to recreate the Parquet files using a combination of schemas and UDFs to correct the bad data.
 
 ## Schemas
 
-When you read data into a Spark DataFrame, you can provide a schema.
+Reading in data using a schema gives you a lot of power over the resultant structure of the DataFrame (not to mention it makes reading in json files a lot faster, and will allow you to union compatible Parquet files)
 
 #### Case 1: I need to drop an entire column
 To drop an entire column, read the data in with a schema that doesn't contain that column. When you write the DataFrame back out, the column will no longer exist
@@ -65,13 +65,13 @@ object WhereTransform {
 
 [UDFs in Spark](https://blog.cloudera.com/blog/2017/02/working-with-udfs-in-apache-spark/) are used to apply functions to a row of data. The result of the UDF becomes the field value.
 
+Note that when using UDFs you must alias the resultant column otherwise it will end up renamed similar to `UDF(fieldName)`
 
 #### Case 3: I need to edit the value of a simple type (String, Boolean, ...)
 To edit a simple type you first need to create a function that takes and returns the same type.
 
 This function is then registered for use as a UDF and it can then be applied to a field in a select clause
 
-Note that when using UDFs you must alias the resultant column otherwise it will end up renamed to something like UDF(fieldName)
 
 [SimpleTransform.scala](https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/SimpleTransform.scala)
 ```scala
@@ -81,8 +81,8 @@ object SimpleTransform {
     val originalData = spark.read.schema(RawDataSchema.schema).parquet(sourcePath)
 
     // take in a String, return a String
-    // cleanFunc will simply take the StringType field value and return the empty string in its place
-    // you can interrogate the value and return any StringType here
+    // cleanFunc takes the String field value and return the empty string in its place
+    // you can interrogate the value and return any String here
     def cleanFunc: (String => String) = { _ => "" }
 
     // register the func as a udf
@@ -93,7 +93,7 @@ object SimpleTransform {
 
     // if you have data that doesn't need editing, you can separate it out
     // The data will need to be in a form that can be unioned with the edited data
-    // I do that here by selecting out all the fields.
+    // That can be done by selecting out the fields in the same way in both the good and transformed data sets.
     val alreadyGoodData = originalData.where("myField is null").select(
       Seq[Column](
         $"myField",
@@ -236,4 +236,4 @@ object StructTypeTransform {
 
 ### Finally
 
-Always test your transforms! Who wants to delete data only to find out their transform failed?
+Always test your transforms before you delete the original data!
