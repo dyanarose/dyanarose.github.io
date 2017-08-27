@@ -2,7 +2,7 @@
 layout: post
 title: "so you need to edit a parquet file"
 date: 2017-08-04 11:40:32 +0100
-comments: true
+comments: false
 categories:
 published: true
 ---
