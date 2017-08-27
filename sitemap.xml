@@ -3,6 +3,12 @@
   
   
   <url>
+    <loc>http://dyanarose.github.io/github/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/</loc>
+    <lastmod>2017-08-26T13:39:00+01:00</lastmod>
+    <priority>0.8</priority>
+  </url>
+  
+  <url>
     <loc>http://dyanarose.github.io/github/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/</loc>
     <lastmod>2017-08-04T11:40:32+01:00</lastmod>
     <priority>0.8</priority>
@@ -23,21 +29,21 @@
   
   <url>
     <loc>http://dyanarose.github.io/github/blog/archives/</loc>
-    <lastmod>2017-08-06T15:56:10+01:00</lastmod>
+    <lastmod>2017-08-27T09:46:23+01:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
     <loc>http://dyanarose.github.io/github/</loc>
-    <lastmod>2017-08-06T15:56:10+01:00</lastmod>
+    <lastmod>2017-08-27T09:46:23+01:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   
   <url>
     <loc>http://dyanarose.github.io/github/dateformats/</loc>
-    <lastmod>2017-08-06T15:56:10+01:00</lastmod>
+    <lastmod>2017-08-27T09:46:23+01:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>

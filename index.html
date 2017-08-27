@@ -9,7 +9,7 @@
   <meta name="author" content="Dyana Rose">
 
   
-  <meta name="description" content="You&rsquo;ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was &hellip;">
+  <meta name="description" content="tl;dr application-interrupts I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -67,6 +67,171 @@
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/">Graceful Shutdown of Java Apps Under Docker</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-08-26T13:39:00+01:00" pubdate data-updated="true">Aug 26<sup>th</sup>, 2017</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>tl;dr <a href="https://github.com/dyanarose/application-interrupts">application-interrupts</a></p>
+
+<p>I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.</p>
+
+<p>This app has a main loop that receives messages off an AWS SQS queue, processes those messages, takes action if required (making a put request to a third party), and then deletes the messages off the queue.</p>
+
+<p>Each action must only ever send a unique record to the api. Because the third party doesn&rsquo;t expose any unique identifier for a record, though it does provide an endpoint to get a list of all existing records, the application itself must handle the idea of uniqueness.</p>
+
+<p>So, in the case of a double whammy of my app being shut down after taking action, but before deleting the message from the queue, and the third party being slow to update the list of previous requests, I could end up sending duplicate records when the new app starts up.</p>
+
+<h2>No problem, we&rsquo;ve got SIGTERM</h2>
+
+<p>When <code>docker stop</code> is called on a container, SIGTERM is sent to PID 1, and in Java a <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/lang/hook-design.html">shutdown hook</a> is used to catch the SIGTERM and clean up any resources before finally stopping.</p>
+
+<p>In this case though, it&rsquo;s not resources that need cleaning up. This is a continuously running application that needs to finish any work currently in process before returning out of the main loop and stopping.</p>
+
+<p>As it happens, Java has a good way of letting a Thread know that the application would like it to shut down before it starts its next itteration of work.</p>
+
+<h2>Interrupts</h2>
+
+<p>A Thread in Java has an <code>interrupted</code> method which returns true if the Thread has been interrupted since the last time <code>Thread.interrupted()</code> was called.
+(more on <a href="https://docs.oracle.com/javase/tutorial/essential/concurrency/interrupt.html">Interrupts</a>)</p>
+
+<h3>Why are interrupts useful</h3>
+
+<p>In the main loop a condition of <code>while(!Thread.interrupted())</code> will allow the while block to run to completion, but also prevent the next execution if an interrupt occured during the previous run, which is exactly what needs to happen to allow messages to complete processing before the app shuts down.</p>
+
+<h4>How to interrupt a thread</h4>
+
+<p>The short answer is &lsquo;by invoking <code>Thread.interrupt</code>&rsquo; in the shutdown hook.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">threadInterruptedOnShutdown</span><span class="o">(</span><span class="kt">long</span> <span class="n">timeout</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// Setting interrupt doesn&#39;t cause the application to wait for the thread to exit.</span>
+</span><span class='line'>    <span class="c1">// The statements inside the interrupt block in the loop may or may not be executed.</span>
+</span><span class='line'>    <span class="n">String</span> <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;threadInterruptedOnShutdown wait &quot;</span> <span class="o">+</span> <span class="n">timeout</span><span class="o">;</span>
+</span><span class='line'>    <span class="n">Thread</span> <span class="n">t</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(</span><span class="k">new</span> <span class="n">RunnableLoop</span><span class="o">(</span><span class="n">name</span><span class="o">,</span> <span class="n">timeout</span><span class="o">));</span>
+</span><span class='line'>    <span class="n">t</span><span class="o">.</span><span class="na">start</span><span class="o">();</span>
+</span><span class='line'>    <span class="n">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: setting interrupt&quot;</span><span class="o">);</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="na">interrupt</span><span class="o">();</span>
+</span><span class='line'>        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: shutting down&quot;</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}));</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Just calling interrupt on a Thread doesn&rsquo;t give the control needed to ensure the current work is completed. It doesn&rsquo;t necessarily wait on the Thread to exit before letting the application shut down. There&rsquo;s no reason you couldn&rsquo;t write the code to handle this of course, but the <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ExecutorService.html">ExecutorService</a> already provides that for us.</p>
+
+<p>When submitting a Runnable (or Callable) to the ExecutorService, a handle for a Future is returned. Working together, the Future and the ExecutorService give control over interrupting Threads, waiting for them to exit, and if anything fails to exit, providing an opportunity to do any damage control.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">futureFromExecutorService</span><span class="o">(</span><span class="kt">long</span> <span class="n">timeout</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// the executor service submit method allows us to get a handle on the thread</span>
+</span><span class='line'>    <span class="c1">// via a future and set the interrupt in the shutdown hook</span>
+</span><span class='line'>    <span class="n">String</span> <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;futureFromExecutorService wait &quot;</span> <span class="o">+</span> <span class="n">timeout</span><span class="o">;</span>
+</span><span class='line'>    <span class="n">ExecutorService</span> <span class="n">service</span> <span class="o">=</span> <span class="n">Executors</span><span class="o">.</span><span class="na">newSingleThreadExecutor</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">Future</span><span class="o">&lt;?&gt;</span> <span class="n">app</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="na">submit</span><span class="o">(</span><span class="k">new</span> <span class="n">RunnableLoop</span><span class="o">(</span><span class="n">name</span><span class="o">,</span> <span class="n">timeout</span><span class="o">));</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: setting interrupt&quot;</span><span class="o">);</span>
+</span><span class='line'>        <span class="n">app</span><span class="o">.</span><span class="na">cancel</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+</span><span class='line'>        <span class="n">service</span><span class="o">.</span><span class="na">shutdown</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">try</span> <span class="o">{</span>
+</span><span class='line'>            <span class="c1">// give the thread time to shutdown. This needs to be comfortably less than the</span>
+</span><span class='line'>            <span class="c1">// time the docker stop command will wait for a container to terminate on its own</span>
+</span><span class='line'>            <span class="c1">// before forcibly killing it.</span>
+</span><span class='line'>            <span class="k">if</span> <span class="o">(!</span><span class="n">service</span><span class="o">.</span><span class="na">awaitTermination</span><span class="o">(</span><span class="mi">7</span><span class="o">,</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">))</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: did not shutdown in time, forcing service shutdown&quot;</span><span class="o">);</span>
+</span><span class='line'>                <span class="n">service</span><span class="o">.</span><span class="na">shutdownNow</span><span class="o">();</span>
+</span><span class='line'>            <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: shutdown cleanly&quot;</span><span class="o">);</span>
+</span><span class='line'>            <span class="o">}</span>
+</span><span class='line'>        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">InterruptedException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: shutdown timer interrupted, forcing service shutdown&quot;</span><span class="o">);</span>
+</span><span class='line'>            <span class="n">service</span><span class="o">.</span><span class="na">shutdownNow</span><span class="o">();</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>    <span class="o">}));</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To interrupt the Thread when SIGTERM is received, inside the shutdown hook call <code>.cancel(true)</code> on the Future. The boolean parameter allows the cancel method to interrupt a running Thread. Without that parameter, the Thread will not be interrupted.</p>
+
+<p>Once the Future is cancelled, the service can begin shutting down. The ExecutorService has two types of shutdown. <code>.shutdown()</code> will stop any more work from being submitted to the service while allowing existing work to execute. <code>.shutdownNow()</code> on the other hand actively attempts to stop all running tasks.</p>
+
+<p>After calling <code>.shutdown()</code> use the ExecutorService&rsquo;s <code>.awaitTermination</code> method to both give the Threads time to finish any current work and also to handle those that do not return in time. Set the timout argument to be less than that of the <code>docker stop</code> command so that there will be time to do damage control and attempt a final <code>.shutdownNow()</code> before docker kills the container for being non-responsive.</p>
+
+<p>All together, this allows a continously running application to respond to shutdown requests in a timely manner and also complete the work that is currently in process.</p>
+</div>
+  
+  
+
+
+    </article>
   
   
     <article>
@@ -1906,6 +2071,10 @@ CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
     <section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/">Graceful Shutdown of Java Apps Under Docker</a>
+      </li>
     
       <li class="post">
         <a href="/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/">So You Need to Edit a Parquet File</a>
