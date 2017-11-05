@@ -4,6 +4,7 @@
 .gist-cache
 .pygments-cache
 .idea/workspace.xml
+.vagrant
 _deploy
 public
 sass.old
