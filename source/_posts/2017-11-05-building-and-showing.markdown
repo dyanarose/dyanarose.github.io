@@ -3,7 +3,7 @@ layout: post
 title: "Building and Showing"
 date: 2017-11-05 10:57:57 +0000
 comments: false
-published: false
+published: true
 categories: 
 ---
 
