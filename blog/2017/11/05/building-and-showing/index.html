@@ -5,12 +5,11 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Preventing Duplication When Creating Relationships in Neo4j - These Things Happen</title>
+  <title>Building and Showing - These Things Happen</title>
   <meta name="author" content="Dyana Rose">
 
   
-  <meta name="description" content="Creating relationships between known nodes using Cypher in Neo4j is simple. MATCH (p:Person), (e:Episode)
-CREATE (p) - [:INTERVIEWED_IN] -&gt; (e) &hellip;">
+  <meta name="description" content="On and off I&rsquo;ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I&rsquo;ve never &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -19,7 +18,7 @@ CREATE (p) - [:INTERVIEWED_IN] -&gt; (e) &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://dyanarose.github.io/github/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j">
+  <link rel="canonical" href="http://dyanarose.github.io/github/blog/2017/11/05/building-and-showing">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="These Things Happen" type="application/atom+xml">
@@ -71,7 +70,7 @@ CREATE (p) - [:INTERVIEWED_IN] -&gt; (e) &hellip;">
   
   <header>
     
-      <h1 class="entry-title">Preventing Duplication When Creating Relationships in Neo4j</h1>
+      <h1 class="entry-title">Building and Showing</h1>
     
     
       <p class="meta">
@@ -87,91 +86,42 @@ CREATE (p) - [:INTERVIEWED_IN] -&gt; (e) &hellip;">
   
 
 
-<time datetime="2014-07-08T20:50:10+01:00" pubdate data-updated="true">Jul 8<sup>th</sup>, 2014</time>
+<time datetime="2017-11-05T10:57:57+00:00" pubdate data-updated="true">Nov 5<sup>th</sup>, 2017</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>Creating relationships between known nodes using Cypher in Neo4j is simple.</p>
+<div class="entry-content"><p>On and off I&rsquo;ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I&rsquo;ve never publicly linked to it.</p>
 
-<pre><code>MATCH (p:Person), (e:Episode)
-CREATE (p) - [:INTERVIEWED_IN] -&gt; (e)
-</code></pre>
+<p>Part of the reason is that it&rsquo;s not a finished product and I&rsquo;m not a web designer. But why should that stop me, eh? It&rsquo;s already been an interesting product involving:
+ &ndash; a service retrieving the data from the GW2 API
+ &ndash; optimising sql to calculate the candlesticks quickly
+ &ndash; an RTL service that takes old data and moves to a better long term storage format and then populates a cache
+ &ndash; a website which must merge cached and uncached data before returning the candlesticks back to the caller.</p>
 
-<p>But what it you don&rsquo;t know if one of the nodes exists? And further, what if you don&rsquo;t know if the relationship itself already exists?</p>
+<p>It didn&rsquo;t start out with 2 services, a website, and a cache though. It started with a program, written in Go that would call an endpoint once an hour and then save the results in a sqlite database.</p>
 
-<ul>
-<li>If the node doesn&rsquo;t exist, I want it to be created.</li>
-<li>If the relationship doesn&rsquo;t exist, I want it to be created.</li>
-<li>If both node and relationship exist, then nothing should be changed</li>
-</ul>
+<p>At that time I didn&rsquo;t know what I wanted to do with the data, I just knew I wanted to do <em>something</em>.</p>
 
+<p>Eventually, that something became me answering the question &lsquo;what questions do I want the answers to?&rsquo; As it turns out, what I want is to answer yet another question, &lsquo;should I buy, sell, or make this item, and should I do it now.&rsquo; Now this question I could answer! But my tools at the time would become problematic.</p>
 
-<p>The simple scenario is of a set of Episode nodes and a set of Person nodes.</p>
+<p>I chose to display historical data using candlestick charts, as I like the view of how prices are moving in a given time period. Calculating open, close, min and max using sqlite proved to be an interesting problem. It was possible though, with some sub-queries, and with some tradeoffs. For example I could only get results for one item at a time, and the larger the dataset, the slower the calculation got. But, most importantly, it gave me a place to start. And it worked!</p>
 
-<pre><code>CREATE (e:Episode {title:"foo", subtitle:"bar"})
-return e
-CREATE (p:Person {name:"Lynn Rose"})
-return p
-</code></pre>
+<p>Once the requirements started shaking out, infrastructure changes became frequent. I was inside the AWS free tier, but as the sqlite file grew, I started to get worried about EBS storage and keeping things free. So my architecture had to change and I moved to using RDS and PostgreSQL.</p>
 
-<p>The Episode nodes are known to exist. The Person nodes may or may not exist.</p>
+<p>Then the fact that the data, once inserted into PostgreSQL, was effectivley dead, started grating on me, and also filling up my free tier allotments of space in RDS.</p>
 
-<p>My first attempts at getting this right in my working database were tragic failures.
-For example, the following, while working as intended in a new 2.0.1 database, fails and causes duplicate person nodes in my working database. (Adding a unique constraint on person.name causes the statement to throw an exception rather than create a duplicate)</p>
+<p>So I brought in an RTL process to take the dead data out of PostgreSQL, store it more efficiently, and use it to populate a cache.</p>
 
-<pre><code>MATCH (e:Episode {title: "foo"})
-CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p:Person {name:"Lynn Rose"})
-</code></pre>
+<p>And then the cache grew too fast and I started seeing evictions. But new problem means new solution. I needed a better way (or even a way) of compressing the data going into the cache. I&rsquo;ve worked with Protobuf before so after a bit of a search around to see if Avro would be an immediate better fit, I decided to go with compression via Protobuf. I also reworked the structure of the stored data, because once it was compressed, the keys were still a major source of bloat. And that worked beautifully. I went from being able to store a few months of data to at few years.</p>
 
-<p>As I said, the duplication doesn&rsquo;t happen in a clean 2.0.1 database, so the problem must be with my working database.</p>
+<p>And that&rsquo;s where things stand right now. The UI isn&rsquo;t much to talk about but it&rsquo;s clean (sparse some may say) and it&rsquo;s pretty zippy. Which is a long way from the minutes it used to take to load only a single month of data.</p>
 
-<ol>
-<li>The database was originally created on Neo4j 1.9.3 and is now running under Neo4j 2.0.1</li>
-<li>The nodes created before the release of 2.x use the old style indexes.</li>
-</ol>
+<p><a href="http://www.gw2roar.com">http://www.gw2roar.com</a></p>
 
-
-<p>But those facts aside, I still need to stop the duplication! So back to the <a href="http://docs.neo4j.org/chunked/stable/cypher-query-lang.html">Cypher documentation</a>.</p>
-
-<p>The Cypher documents for <a href="http://docs.neo4j.org/chunked/stable/query-create-unique.html">CREATE UNIQUE</a>  specify the following in a call out box:</p>
-
-<blockquote><p>  <a href="http://docs.neo4j.org/chunked/stable/query-merge.html">MERGE</a> might be what you want to use instead of CREATE UNIQUE</p></blockquote>
-
-<p>It&rsquo;s MERGE that gives the ability to control what happens when a node is, or isn&rsquo;t, matched. It does this through the syntax of ON MATCH and ON CREATE.</p>
-
-<p>Using MERGE and ON CREATE I can get a handle on an existing person node to be able to use in our relationship creation, thus preventing duplication of person nodes.</p>
-
-<pre><code>MATCH (e:Episode {title: "foo"})
-MERGE (p:Person {name: "Lynn Rose"})
-ON CREATE SET p.firstname = "Lynn", p.surname = "Rose"
-MERGE (e) &lt;- [:INTERVIEWED_IN] - (p)
-</code></pre>
-
-<p>But, we&rsquo;ve still got an issue here. This doesn&rsquo;t necessarily solve the problem of duplicating relationships.</p>
-
-<p>In that call out box in the CREATE UNIQUE documentation, it goes on to say:</p>
-
-<blockquote><p>  Note however, that MERGE doesn&rsquo;t give as strong guarantees for relationships being unique.</p></blockquote>
-
-<p>So I take from this that I should use MERGE to prevent node duplication, but CREATE UNIQUE should be used to prevent relationship duplication.</p>
-
-<pre><code>MATCH (e:Episode {title: "foo"})
-MERGE (p:Person {name: "Lynn Rose"})
-ON CREATE SET p.firstname = "Lynn", p.surname = "Rose"
-CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
-</code></pre>
-
-<p>And here we are.</p>
-
-<ul>
-<li>If the node doesn&rsquo;t exist, it is created using MERGE ON CREATE.</li>
-<li>If the relationship doesn&rsquo;t exist, it is created using CREATE UNIQUE.</li>
-<li>If both node and relationship exist, then nothing is changed.</li>
-</ul>
-
+<p>I&rsquo;m going to continue to talk more about the choices I made, and continue to make, and why I had to make them with this project. For example, the significant work around keeping both cache and database sizes sane, automating the ETL process, automating deployments, and anything that comes next.</p>
 </div>
 
 
@@ -194,21 +144,15 @@ CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
   
 
 
-<time datetime="2014-07-08T20:50:10+01:00" pubdate data-updated="true">Jul 8<sup>th</sup>, 2014</time>
+<time datetime="2017-11-05T10:57:57+00:00" pubdate data-updated="true">Nov 5<sup>th</sup>, 2017</time>
       
-
-<span class="categories">
-  
-    <a class='category' href='/blog/categories/cypher/'>cypher</a>, <a class='category' href='/blog/categories/neo4j/'>neo4j</a>
-  
-</span>
 
 
     </p>
     
       <div class="sharing">
   
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://dyanarose.github.io/github/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/" data-via="dyanarose" data-counturl="http://dyanarose.github.io/github/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/" >Tweet</a>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://dyanarose.github.io/github/blog/2017/11/05/building-and-showing/" data-via="dyanarose" data-counturl="http://dyanarose.github.io/github/blog/2017/11/05/building-and-showing/" >Tweet</a>
   
   
   
@@ -217,8 +161,8 @@ CREATE UNIQUE (e) &lt;- [:INTERVIEWED_IN] - (p)
     
     <p class="meta">
       
+        <a class="basic-alignment left" href="/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" title="Previous Post: graceful shutdown of java apps under docker">&laquo; graceful shutdown of java apps under docker</a>
       
-        <a class="basic-alignment right" href="/blog/2016/04/09/exploring-spark-sql-datatypes/" title="Next Post: Exploring Spark SQL DataTypes">Exploring Spark SQL DataTypes &raquo;</a>
       
     </p>
   </footer>
