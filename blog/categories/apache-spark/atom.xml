@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: Apache Spark | These Things Happen]]></title>
-  <link href="http://dyanarose.github.io/github/blog/categories/apache-spark/atom.xml" rel="self"/>
-  <link href="http://dyanarose.github.io/github/"/>
-  <updated>2017-11-05T12:44:13+00:00</updated>
-  <id>http://dyanarose.github.io/github/</id>
+  <link href="http://dyanarose.github.io//blog/categories/apache-spark/atom.xml" rel="self"/>
+  <link href="http://dyanarose.github.io//"/>
+  <updated>2017-11-06T12:28:15+00:00</updated>
+  <id>http://dyanarose.github.io//</id>
   <author>
     <name><![CDATA[Dyana Rose]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Exploring Spark SQL DataTypes]]></title>
-    <link href="http://dyanarose.github.io/github/blog/2016/04/09/exploring-spark-sql-datatypes/"/>
+    <link href="http://dyanarose.github.io//blog/2016/04/09/exploring-spark-sql-datatypes/"/>
     <updated>2016-04-09T12:57:06+01:00</updated>
-    <id>http://dyanarose.github.io/github/blog/2016/04/09/exploring-spark-sql-datatypes</id>
+    <id>http://dyanarose.github.io//blog/2016/04/09/exploring-spark-sql-datatypes</id>
     <content type="html"><![CDATA[<p>I&rsquo;ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I&rsquo;m converting to parquet files. The data won&rsquo;t all be processed at once and the schema will need to grow, so it&rsquo;s imperative that the parquet files have schemas that are compatible.</p>
 
 <p>The only one I really can&rsquo;t get working yet is the CalendarIntervalType.</p>
