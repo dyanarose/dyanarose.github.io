@@ -10,6 +10,7 @@ categories:
 On and off I've been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I've never publicly linked to it. 
 
 Part of the reason is that it's not a finished product and I'm not a web designer. But why should that stop me, eh? It's already been an interesting product involving:
+
  - a service retrieving the data from the GW2 API
  - optimising sql to calculate the candlesticks quickly
  - an RTL service that takes old data and moves to a better long term storage format and then populates a cache
