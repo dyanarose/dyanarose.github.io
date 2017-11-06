@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: Neo4j | These Things Happen]]></title>
-  <link href="http://dyanarose.github.io//blog/categories/neo4j/atom.xml" rel="self"/>
-  <link href="http://dyanarose.github.io//"/>
-  <updated>2017-11-06T12:28:15+00:00</updated>
-  <id>http://dyanarose.github.io//</id>
+  <link href="http://dyanarose.github.io/blog/categories/neo4j/atom.xml" rel="self"/>
+  <link href="http://dyanarose.github.io/"/>
+  <updated>2017-11-06T12:33:11+00:00</updated>
+  <id>http://dyanarose.github.io/</id>
   <author>
     <name><![CDATA[Dyana Rose]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Preventing Duplication When Creating Relationships in Neo4j]]></title>
-    <link href="http://dyanarose.github.io//blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
+    <link href="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
     <updated>2014-07-08T20:50:10+01:00</updated>
-    <id>http://dyanarose.github.io//blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id>
+    <id>http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id>
     <content type="html"><![CDATA[<p>Creating relationships between known nodes using Cypher in Neo4j is simple.</p>
 
 <pre><code>MATCH (p:Person), (e:Episode)

@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[These Things Happen]]></title>
-  <link href="http://dyanarose.github.io//atom.xml" rel="self"/>
-  <link href="http://dyanarose.github.io//"/>
-  <updated>2017-11-06T12:28:15+00:00</updated>
-  <id>http://dyanarose.github.io//</id>
+  <link href="http://dyanarose.github.io/atom.xml" rel="self"/>
+  <link href="http://dyanarose.github.io/"/>
+  <updated>2017-11-06T12:33:11+00:00</updated>
+  <id>http://dyanarose.github.io/</id>
   <author>
     <name><![CDATA[Dyana Rose]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Building and Showing]]></title>
-    <link href="http://dyanarose.github.io//blog/2017/11/05/building-and-showing/"/>
+    <link href="http://dyanarose.github.io/blog/2017/11/05/building-and-showing/"/>
     <updated>2017-11-05T10:57:57+00:00</updated>
-    <id>http://dyanarose.github.io//blog/2017/11/05/building-and-showing</id>
+    <id>http://dyanarose.github.io/blog/2017/11/05/building-and-showing</id>
     <content type="html"><![CDATA[<p>On and off I&rsquo;ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I&rsquo;ve never publicly linked to it.</p>
 
 <p>Part of the reason is that it&rsquo;s not a finished product and I&rsquo;m not a web designer. But why should that stop me, eh? It&rsquo;s already been an interesting product involving:</p>
@@ -56,9 +56,9 @@
   
   <entry>
     <title type="html"><![CDATA[Graceful Shutdown of Java Apps Under Docker]]></title>
-    <link href="http://dyanarose.github.io//blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/"/>
+    <link href="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/"/>
     <updated>2017-08-26T13:39:00+01:00</updated>
-    <id>http://dyanarose.github.io//blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker</id>
+    <id>http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker</id>
     <content type="html"><![CDATA[<p>tl;dr <a href="https://github.com/dyanarose/application-interrupts">application-interrupts</a></p>
 
 <p>I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.</p>
@@ -194,9 +194,9 @@
   
   <entry>
     <title type="html"><![CDATA[So You Need to Edit a Parquet File]]></title>
-    <link href="http://dyanarose.github.io//blog/2017/08/04/so-you-need-to-edit-a-parquet-file/"/>
+    <link href="http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/"/>
     <updated>2017-08-04T11:40:32+01:00</updated>
-    <id>http://dyanarose.github.io//blog/2017/08/04/so-you-need-to-edit-a-parquet-file</id>
+    <id>http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file</id>
     <content type="html"><![CDATA[<p>You&rsquo;ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?</p>
 
 <p>tl;dr: <a href="https://github.com/dyanarose/parquet-edit-examples">spark-edit-examples</a></p>
@@ -598,9 +598,9 @@
   
   <entry>
     <title type="html"><![CDATA[Exploring Spark SQL DataTypes]]></title>
-    <link href="http://dyanarose.github.io//blog/2016/04/09/exploring-spark-sql-datatypes/"/>
+    <link href="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/"/>
     <updated>2016-04-09T12:57:06+01:00</updated>
-    <id>http://dyanarose.github.io//blog/2016/04/09/exploring-spark-sql-datatypes</id>
+    <id>http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes</id>
     <content type="html"><![CDATA[<p>I&rsquo;ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I&rsquo;m converting to parquet files. The data won&rsquo;t all be processed at once and the schema will need to grow, so it&rsquo;s imperative that the parquet files have schemas that are compatible.</p>
 
 <p>The only one I really can&rsquo;t get working yet is the CalendarIntervalType.</p>
@@ -1854,9 +1854,9 @@
   
   <entry>
     <title type="html"><![CDATA[Preventing Duplication When Creating Relationships in Neo4j]]></title>
-    <link href="http://dyanarose.github.io//blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
+    <link href="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/"/>
     <updated>2014-07-08T20:50:10+01:00</updated>
-    <id>http://dyanarose.github.io//blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id>
+    <id>http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id>
     <content type="html"><![CDATA[<p>Creating relationships between known nodes using Cypher in Neo4j is simple.</p>
 
 <pre><code>MATCH (p:Person), (e:Episode)
