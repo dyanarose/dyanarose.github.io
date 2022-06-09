@@ -1,1497 +1,720 @@
-
 <!DOCTYPE html>
-<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
-<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
-<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
-<head>
+<html lang="en"><head>
   <meta charset="utf-8">
-  <title>Exploring Spark SQL DataTypes - These Things Happen</title>
-  <meta name="author" content="Dyana Rose">
-
-  
-  <meta name="description" content="I&rsquo;ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used &hellip;">
-  
-
-  <!-- http://t.co/dKP3o1e -->
-  <meta name="HandheldFriendly" content="True">
-  <meta name="MobileOptimized" content="320">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  
-  <link rel="canonical" href="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes">
-  <link href="/favicon.png" rel="icon">
-  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
-  <link href="/atom.xml" rel="alternate" title="These Things Happen" type="application/atom+xml">
-  <script src="/javascripts/modernizr-2.0.js"></script>
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
-  <script src="/javascripts/octopress.js" type="text/javascript"></script>
-  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
-<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
-<link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
-<link href='http://fonts.googleapis.com/css?family=Fjalla+One' rel='stylesheet' type='text/css'>
-
-  
-
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>Exploring Spark SQL DataTypes | These Things Happen</title>
+<meta name="generator" content="Jekyll v3.9.2" />
+<meta property="og:title" content="Exploring Spark SQL DataTypes" />
+<meta name="author" content="Dyana Rose" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="I’ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I’m converting to parquet files. The data won’t all be processed at once and the schema will need to grow, so it’s imperative that the parquet files have schemas that are compatible." />
+<meta property="og:description" content="I’ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I’m converting to parquet files. The data won’t all be processed at once and the schema will need to grow, so it’s imperative that the parquet files have schemas that are compatible." />
+<link rel="canonical" href="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/" />
+<meta property="og:url" content="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/" />
+<meta property="og:site_name" content="These Things Happen" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2016-04-09T12:57:06+01:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Exploring Spark SQL DataTypes" />
+<script type="application/ld+json">
+{"description":"I’ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I’m converting to parquet files. The data won’t all be processed at once and the schema will need to grow, so it’s imperative that the parquet files have schemas that are compatible.","author":{"@type":"Person","name":"Dyana Rose"},"@type":"BlogPosting","url":"http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/","headline":"Exploring Spark SQL DataTypes","dateModified":"2016-04-09T12:57:06+01:00","datePublished":"2016-04-09T12:57:06+01:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/css/style.css"><link type="application/atom+xml" rel="alternate" href="http://dyanarose.github.io/feed.xml" title="These Things Happen" />
 </head>
+<body><header class="site-header">
 
-<body   >
-  <header role="banner"><hgroup>
-  <h1><a href="/">These Things Happen</a></h1>
-  
-    <h2>fixing bugs and chewing bubblegum</h2>
-  
-</hgroup>
+  <div class="wrapper"><h1><a class="site-title" rel="author" href="/">These Things Happen</a></h1>
+      
+        <h2>fixing bugs and chewing bubblegum</h2>
+      
+  </div><nav class="site-nav">
+      <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+      <label for="nav-trigger">
+        <span class="menu-icon">
+          <svg viewBox="0 0 18 15" width="18px" height="15px">
+            <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+          </svg>
+        </span>
+      </label>
 
-</header>
-  <nav role="navigation"><ul class="subscription" data-subscription="rss">
-  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
-  
-</ul>
-  
-<form action="https://www.google.com/search" method="get">
-  <fieldset role="search">
-    <input type="hidden" name="q" value="site:dyanarose.github.io" />
-    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
-  </fieldset>
-</form>
-  
-<ul class="main-navigation">
-  <li><a href="/">Blog</a></li>
-  <li><a href="/blog/archives">Archives</a></li>
-    <li><a href="/dateformats">Date/time Cheat Sheet</a></li>
-</ul>
+      <div class="trigger"><a class="page-link" href="/blog/archives/">Archives</a><a class="page-link" href="/dateformats/">Date/time Cheat Sheet</a></div>
+    </nav></header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
 
-</nav>
-  <div id="main">
-    <div id="content">
-      <div>
-<article class="hentry" role="article">
-  
-  <header>
-    
-      <h1 class="entry-title">Exploring Spark SQL DataTypes</h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2016-04-09T12:57:06+01:00" pubdate data-updated="true">Apr 9<sup>th</sup>, 2016</time>
-        
-      </p>
-    
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Exploring Spark SQL DataTypes</h1>
+    <p class="post-meta"><time class="dt-published" datetime="2016-04-09T12:57:06+01:00" itemprop="datePublished">
+        Apr 9, 2016
+      </time></p>
   </header>
 
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>I’ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I’m converting to parquet files. The data won’t all be processed at once and the schema will need to grow, so it’s imperative that the parquet files have schemas that are compatible.</p>
 
-<div class="entry-content"><p>I&rsquo;ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I&rsquo;m converting to parquet files. The data won&rsquo;t all be processed at once and the schema will need to grow, so it&rsquo;s imperative that the parquet files have schemas that are compatible.</p>
+<p>The only one I really can’t get working yet is the CalendarIntervalType.</p>
 
-<p>The only one I really can&rsquo;t get working yet is the CalendarIntervalType.</p>
+<p>Looking at the Spark source files <a href="https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/literals.scala">literals.scala</a> and <a href="https://github.com/apache/spark/blob/master/common/unsafe/src/main/java/org/apache/spark/unsafe/types/CalendarInterval.java">CalendarInterval.java</a> I would assume that <code class="language-plaintext highlighter-rouge">CalendarInterval.fromString</code> is called with the value, however I’m just getting nulls back when passing in a value like ‘interval 2 days’ which, when passed to <code class="language-plaintext highlighter-rouge">CalendarInterval.fromString</code>, returns a non-null <code class="language-plaintext highlighter-rouge">CalendarInterval</code>.</p>
 
-<p>Looking at the Spark source files <a href="https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/literals.scala">literals.scala</a> and <a href="https://github.com/apache/spark/blob/master/common/unsafe/src/main/java/org/apache/spark/unsafe/types/CalendarInterval.java">CalendarInterval.java</a> I would assume that <code>CalendarInterval.fromString</code> is called with the value, however I&rsquo;m just getting nulls back when passing in a value like &lsquo;interval 2 days&rsquo; which, when passed to <code>CalendarInterval.fromString</code>, returns a non-null <code>CalendarInterval</code>.</p>
-
-<p>Source code for the tests is at: <a href="https://github.com/dyanarose/dlr-spark">https://github.com/dyanarose/dlr-spark</a></p>
+<p>Source code for the tests is at: https://github.com/dyanarose/dlr-spark</p>
 
 <p>Results:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>-------------- DecimalType --------------
+------- DecimalType Input
+{'decimal': 1.2345}
+{'decimal': 1}
+{'decimal': 234.231}
+{'decimal': Infinity}
+{'decimal': -Infinity}
+{'decimal': NaN}
+{'decimal': '1'}
+{'decimal': '1.2345'}
+{'decimal': null}
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-<span class='line-number'>63</span>
-<span class='line-number'>64</span>
-<span class='line-number'>65</span>
-<span class='line-number'>66</span>
-<span class='line-number'>67</span>
-<span class='line-number'>68</span>
-<span class='line-number'>69</span>
-<span class='line-number'>70</span>
-<span class='line-number'>71</span>
-<span class='line-number'>72</span>
-<span class='line-number'>73</span>
-<span class='line-number'>74</span>
-<span class='line-number'>75</span>
-<span class='line-number'>76</span>
-<span class='line-number'>77</span>
-<span class='line-number'>78</span>
-<span class='line-number'>79</span>
-<span class='line-number'>80</span>
-<span class='line-number'>81</span>
-<span class='line-number'>82</span>
-<span class='line-number'>83</span>
-<span class='line-number'>84</span>
-<span class='line-number'>85</span>
-<span class='line-number'>86</span>
-<span class='line-number'>87</span>
-<span class='line-number'>88</span>
-<span class='line-number'>89</span>
-<span class='line-number'>90</span>
-<span class='line-number'>91</span>
-<span class='line-number'>92</span>
-<span class='line-number'>93</span>
-<span class='line-number'>94</span>
-<span class='line-number'>95</span>
-<span class='line-number'>96</span>
-<span class='line-number'>97</span>
-<span class='line-number'>98</span>
-<span class='line-number'>99</span>
-<span class='line-number'>100</span>
-<span class='line-number'>101</span>
-<span class='line-number'>102</span>
-<span class='line-number'>103</span>
-<span class='line-number'>104</span>
-<span class='line-number'>105</span>
-<span class='line-number'>106</span>
-<span class='line-number'>107</span>
-<span class='line-number'>108</span>
-<span class='line-number'>109</span>
-<span class='line-number'>110</span>
-<span class='line-number'>111</span>
-<span class='line-number'>112</span>
-<span class='line-number'>113</span>
-<span class='line-number'>114</span>
-<span class='line-number'>115</span>
-<span class='line-number'>116</span>
-<span class='line-number'>117</span>
-<span class='line-number'>118</span>
-<span class='line-number'>119</span>
-<span class='line-number'>120</span>
-<span class='line-number'>121</span>
-<span class='line-number'>122</span>
-<span class='line-number'>123</span>
-<span class='line-number'>124</span>
-<span class='line-number'>125</span>
-<span class='line-number'>126</span>
-<span class='line-number'>127</span>
-<span class='line-number'>128</span>
-<span class='line-number'>129</span>
-<span class='line-number'>130</span>
-<span class='line-number'>131</span>
-<span class='line-number'>132</span>
-<span class='line-number'>133</span>
-<span class='line-number'>134</span>
-<span class='line-number'>135</span>
-<span class='line-number'>136</span>
-<span class='line-number'>137</span>
-<span class='line-number'>138</span>
-<span class='line-number'>139</span>
-<span class='line-number'>140</span>
-<span class='line-number'>141</span>
-<span class='line-number'>142</span>
-<span class='line-number'>143</span>
-<span class='line-number'>144</span>
-<span class='line-number'>145</span>
-<span class='line-number'>146</span>
-<span class='line-number'>147</span>
-<span class='line-number'>148</span>
-<span class='line-number'>149</span>
-<span class='line-number'>150</span>
-<span class='line-number'>151</span>
-<span class='line-number'>152</span>
-<span class='line-number'>153</span>
-<span class='line-number'>154</span>
-<span class='line-number'>155</span>
-<span class='line-number'>156</span>
-<span class='line-number'>157</span>
-<span class='line-number'>158</span>
-<span class='line-number'>159</span>
-<span class='line-number'>160</span>
-<span class='line-number'>161</span>
-<span class='line-number'>162</span>
-<span class='line-number'>163</span>
-<span class='line-number'>164</span>
-<span class='line-number'>165</span>
-<span class='line-number'>166</span>
-<span class='line-number'>167</span>
-<span class='line-number'>168</span>
-<span class='line-number'>169</span>
-<span class='line-number'>170</span>
-<span class='line-number'>171</span>
-<span class='line-number'>172</span>
-<span class='line-number'>173</span>
-<span class='line-number'>174</span>
-<span class='line-number'>175</span>
-<span class='line-number'>176</span>
-<span class='line-number'>177</span>
-<span class='line-number'>178</span>
-<span class='line-number'>179</span>
-<span class='line-number'>180</span>
-<span class='line-number'>181</span>
-<span class='line-number'>182</span>
-<span class='line-number'>183</span>
-<span class='line-number'>184</span>
-<span class='line-number'>185</span>
-<span class='line-number'>186</span>
-<span class='line-number'>187</span>
-<span class='line-number'>188</span>
-<span class='line-number'>189</span>
-<span class='line-number'>190</span>
-<span class='line-number'>191</span>
-<span class='line-number'>192</span>
-<span class='line-number'>193</span>
-<span class='line-number'>194</span>
-<span class='line-number'>195</span>
-<span class='line-number'>196</span>
-<span class='line-number'>197</span>
-<span class='line-number'>198</span>
-<span class='line-number'>199</span>
-<span class='line-number'>200</span>
-<span class='line-number'>201</span>
-<span class='line-number'>202</span>
-<span class='line-number'>203</span>
-<span class='line-number'>204</span>
-<span class='line-number'>205</span>
-<span class='line-number'>206</span>
-<span class='line-number'>207</span>
-<span class='line-number'>208</span>
-<span class='line-number'>209</span>
-<span class='line-number'>210</span>
-<span class='line-number'>211</span>
-<span class='line-number'>212</span>
-<span class='line-number'>213</span>
-<span class='line-number'>214</span>
-<span class='line-number'>215</span>
-<span class='line-number'>216</span>
-<span class='line-number'>217</span>
-<span class='line-number'>218</span>
-<span class='line-number'>219</span>
-<span class='line-number'>220</span>
-<span class='line-number'>221</span>
-<span class='line-number'>222</span>
-<span class='line-number'>223</span>
-<span class='line-number'>224</span>
-<span class='line-number'>225</span>
-<span class='line-number'>226</span>
-<span class='line-number'>227</span>
-<span class='line-number'>228</span>
-<span class='line-number'>229</span>
-<span class='line-number'>230</span>
-<span class='line-number'>231</span>
-<span class='line-number'>232</span>
-<span class='line-number'>233</span>
-<span class='line-number'>234</span>
-<span class='line-number'>235</span>
-<span class='line-number'>236</span>
-<span class='line-number'>237</span>
-<span class='line-number'>238</span>
-<span class='line-number'>239</span>
-<span class='line-number'>240</span>
-<span class='line-number'>241</span>
-<span class='line-number'>242</span>
-<span class='line-number'>243</span>
-<span class='line-number'>244</span>
-<span class='line-number'>245</span>
-<span class='line-number'>246</span>
-<span class='line-number'>247</span>
-<span class='line-number'>248</span>
-<span class='line-number'>249</span>
-<span class='line-number'>250</span>
-<span class='line-number'>251</span>
-<span class='line-number'>252</span>
-<span class='line-number'>253</span>
-<span class='line-number'>254</span>
-<span class='line-number'>255</span>
-<span class='line-number'>256</span>
-<span class='line-number'>257</span>
-<span class='line-number'>258</span>
-<span class='line-number'>259</span>
-<span class='line-number'>260</span>
-<span class='line-number'>261</span>
-<span class='line-number'>262</span>
-<span class='line-number'>263</span>
-<span class='line-number'>264</span>
-<span class='line-number'>265</span>
-<span class='line-number'>266</span>
-<span class='line-number'>267</span>
-<span class='line-number'>268</span>
-<span class='line-number'>269</span>
-<span class='line-number'>270</span>
-<span class='line-number'>271</span>
-<span class='line-number'>272</span>
-<span class='line-number'>273</span>
-<span class='line-number'>274</span>
-<span class='line-number'>275</span>
-<span class='line-number'>276</span>
-<span class='line-number'>277</span>
-<span class='line-number'>278</span>
-<span class='line-number'>279</span>
-<span class='line-number'>280</span>
-<span class='line-number'>281</span>
-<span class='line-number'>282</span>
-<span class='line-number'>283</span>
-<span class='line-number'>284</span>
-<span class='line-number'>285</span>
-<span class='line-number'>286</span>
-<span class='line-number'>287</span>
-<span class='line-number'>288</span>
-<span class='line-number'>289</span>
-<span class='line-number'>290</span>
-<span class='line-number'>291</span>
-<span class='line-number'>292</span>
-<span class='line-number'>293</span>
-<span class='line-number'>294</span>
-<span class='line-number'>295</span>
-<span class='line-number'>296</span>
-<span class='line-number'>297</span>
-<span class='line-number'>298</span>
-<span class='line-number'>299</span>
-<span class='line-number'>300</span>
-<span class='line-number'>301</span>
-<span class='line-number'>302</span>
-<span class='line-number'>303</span>
-<span class='line-number'>304</span>
-<span class='line-number'>305</span>
-<span class='line-number'>306</span>
-<span class='line-number'>307</span>
-<span class='line-number'>308</span>
-<span class='line-number'>309</span>
-<span class='line-number'>310</span>
-<span class='line-number'>311</span>
-<span class='line-number'>312</span>
-<span class='line-number'>313</span>
-<span class='line-number'>314</span>
-<span class='line-number'>315</span>
-<span class='line-number'>316</span>
-<span class='line-number'>317</span>
-<span class='line-number'>318</span>
-<span class='line-number'>319</span>
-<span class='line-number'>320</span>
-<span class='line-number'>321</span>
-<span class='line-number'>322</span>
-<span class='line-number'>323</span>
-<span class='line-number'>324</span>
-<span class='line-number'>325</span>
-<span class='line-number'>326</span>
-<span class='line-number'>327</span>
-<span class='line-number'>328</span>
-<span class='line-number'>329</span>
-<span class='line-number'>330</span>
-<span class='line-number'>331</span>
-<span class='line-number'>332</span>
-<span class='line-number'>333</span>
-<span class='line-number'>334</span>
-<span class='line-number'>335</span>
-<span class='line-number'>336</span>
-<span class='line-number'>337</span>
-<span class='line-number'>338</span>
-<span class='line-number'>339</span>
-<span class='line-number'>340</span>
-<span class='line-number'>341</span>
-<span class='line-number'>342</span>
-<span class='line-number'>343</span>
-<span class='line-number'>344</span>
-<span class='line-number'>345</span>
-<span class='line-number'>346</span>
-<span class='line-number'>347</span>
-<span class='line-number'>348</span>
-<span class='line-number'>349</span>
-<span class='line-number'>350</span>
-<span class='line-number'>351</span>
-<span class='line-number'>352</span>
-<span class='line-number'>353</span>
-<span class='line-number'>354</span>
-<span class='line-number'>355</span>
-<span class='line-number'>356</span>
-<span class='line-number'>357</span>
-<span class='line-number'>358</span>
-<span class='line-number'>359</span>
-<span class='line-number'>360</span>
-<span class='line-number'>361</span>
-<span class='line-number'>362</span>
-<span class='line-number'>363</span>
-<span class='line-number'>364</span>
-<span class='line-number'>365</span>
-<span class='line-number'>366</span>
-<span class='line-number'>367</span>
-<span class='line-number'>368</span>
-<span class='line-number'>369</span>
-<span class='line-number'>370</span>
-<span class='line-number'>371</span>
-<span class='line-number'>372</span>
-<span class='line-number'>373</span>
-<span class='line-number'>374</span>
-<span class='line-number'>375</span>
-<span class='line-number'>376</span>
-<span class='line-number'>377</span>
-<span class='line-number'>378</span>
-<span class='line-number'>379</span>
-<span class='line-number'>380</span>
-<span class='line-number'>381</span>
-<span class='line-number'>382</span>
-<span class='line-number'>383</span>
-<span class='line-number'>384</span>
-<span class='line-number'>385</span>
-<span class='line-number'>386</span>
-<span class='line-number'>387</span>
-<span class='line-number'>388</span>
-<span class='line-number'>389</span>
-<span class='line-number'>390</span>
-<span class='line-number'>391</span>
-<span class='line-number'>392</span>
-<span class='line-number'>393</span>
-<span class='line-number'>394</span>
-<span class='line-number'>395</span>
-<span class='line-number'>396</span>
-<span class='line-number'>397</span>
-<span class='line-number'>398</span>
-<span class='line-number'>399</span>
-<span class='line-number'>400</span>
-<span class='line-number'>401</span>
-<span class='line-number'>402</span>
-<span class='line-number'>403</span>
-<span class='line-number'>404</span>
-<span class='line-number'>405</span>
-<span class='line-number'>406</span>
-<span class='line-number'>407</span>
-<span class='line-number'>408</span>
-<span class='line-number'>409</span>
-<span class='line-number'>410</span>
-<span class='line-number'>411</span>
-<span class='line-number'>412</span>
-<span class='line-number'>413</span>
-<span class='line-number'>414</span>
-<span class='line-number'>415</span>
-<span class='line-number'>416</span>
-<span class='line-number'>417</span>
-<span class='line-number'>418</span>
-<span class='line-number'>419</span>
-<span class='line-number'>420</span>
-<span class='line-number'>421</span>
-<span class='line-number'>422</span>
-<span class='line-number'>423</span>
-<span class='line-number'>424</span>
-<span class='line-number'>425</span>
-<span class='line-number'>426</span>
-<span class='line-number'>427</span>
-<span class='line-number'>428</span>
-<span class='line-number'>429</span>
-<span class='line-number'>430</span>
-<span class='line-number'>431</span>
-<span class='line-number'>432</span>
-<span class='line-number'>433</span>
-<span class='line-number'>434</span>
-<span class='line-number'>435</span>
-<span class='line-number'>436</span>
-<span class='line-number'>437</span>
-<span class='line-number'>438</span>
-<span class='line-number'>439</span>
-<span class='line-number'>440</span>
-<span class='line-number'>441</span>
-<span class='line-number'>442</span>
-<span class='line-number'>443</span>
-<span class='line-number'>444</span>
-<span class='line-number'>445</span>
-<span class='line-number'>446</span>
-<span class='line-number'>447</span>
-<span class='line-number'>448</span>
-<span class='line-number'>449</span>
-<span class='line-number'>450</span>
-<span class='line-number'>451</span>
-<span class='line-number'>452</span>
-<span class='line-number'>453</span>
-<span class='line-number'>454</span>
-<span class='line-number'>455</span>
-<span class='line-number'>456</span>
-<span class='line-number'>457</span>
-<span class='line-number'>458</span>
-<span class='line-number'>459</span>
-<span class='line-number'>460</span>
-<span class='line-number'>461</span>
-<span class='line-number'>462</span>
-<span class='line-number'>463</span>
-<span class='line-number'>464</span>
-<span class='line-number'>465</span>
-<span class='line-number'>466</span>
-<span class='line-number'>467</span>
-<span class='line-number'>468</span>
-<span class='line-number'>469</span>
-<span class='line-number'>470</span>
-<span class='line-number'>471</span>
-<span class='line-number'>472</span>
-<span class='line-number'>473</span>
-<span class='line-number'>474</span>
-<span class='line-number'>475</span>
-<span class='line-number'>476</span>
-<span class='line-number'>477</span>
-<span class='line-number'>478</span>
-<span class='line-number'>479</span>
-<span class='line-number'>480</span>
-<span class='line-number'>481</span>
-<span class='line-number'>482</span>
-<span class='line-number'>483</span>
-<span class='line-number'>484</span>
-<span class='line-number'>485</span>
-<span class='line-number'>486</span>
-<span class='line-number'>487</span>
-<span class='line-number'>488</span>
-<span class='line-number'>489</span>
-<span class='line-number'>490</span>
-<span class='line-number'>491</span>
-<span class='line-number'>492</span>
-<span class='line-number'>493</span>
-<span class='line-number'>494</span>
-<span class='line-number'>495</span>
-<span class='line-number'>496</span>
-<span class='line-number'>497</span>
-<span class='line-number'>498</span>
-<span class='line-number'>499</span>
-<span class='line-number'>500</span>
-<span class='line-number'>501</span>
-<span class='line-number'>502</span>
-<span class='line-number'>503</span>
-<span class='line-number'>504</span>
-<span class='line-number'>505</span>
-<span class='line-number'>506</span>
-<span class='line-number'>507</span>
-<span class='line-number'>508</span>
-<span class='line-number'>509</span>
-<span class='line-number'>510</span>
-<span class='line-number'>511</span>
-<span class='line-number'>512</span>
-<span class='line-number'>513</span>
-<span class='line-number'>514</span>
-<span class='line-number'>515</span>
-<span class='line-number'>516</span>
-<span class='line-number'>517</span>
-<span class='line-number'>518</span>
-<span class='line-number'>519</span>
-<span class='line-number'>520</span>
-<span class='line-number'>521</span>
-<span class='line-number'>522</span>
-<span class='line-number'>523</span>
-<span class='line-number'>524</span>
-<span class='line-number'>525</span>
-<span class='line-number'>526</span>
-<span class='line-number'>527</span>
-<span class='line-number'>528</span>
-<span class='line-number'>529</span>
-<span class='line-number'>530</span>
-<span class='line-number'>531</span>
-<span class='line-number'>532</span>
-<span class='line-number'>533</span>
-<span class='line-number'>534</span>
-<span class='line-number'>535</span>
-<span class='line-number'>536</span>
-<span class='line-number'>537</span>
-<span class='line-number'>538</span>
-<span class='line-number'>539</span>
-<span class='line-number'>540</span>
-<span class='line-number'>541</span>
-<span class='line-number'>542</span>
-<span class='line-number'>543</span>
-<span class='line-number'>544</span>
-<span class='line-number'>545</span>
-<span class='line-number'>546</span>
-<span class='line-number'>547</span>
-<span class='line-number'>548</span>
-<span class='line-number'>549</span>
-<span class='line-number'>550</span>
-<span class='line-number'>551</span>
-<span class='line-number'>552</span>
-<span class='line-number'>553</span>
-<span class='line-number'>554</span>
-<span class='line-number'>555</span>
-<span class='line-number'>556</span>
-<span class='line-number'>557</span>
-<span class='line-number'>558</span>
-<span class='line-number'>559</span>
-<span class='line-number'>560</span>
-<span class='line-number'>561</span>
-<span class='line-number'>562</span>
-<span class='line-number'>563</span>
-<span class='line-number'>564</span>
-<span class='line-number'>565</span>
-<span class='line-number'>566</span>
-<span class='line-number'>567</span>
-<span class='line-number'>568</span>
-<span class='line-number'>569</span>
-<span class='line-number'>570</span>
-<span class='line-number'>571</span>
-<span class='line-number'>572</span>
-<span class='line-number'>573</span>
-<span class='line-number'>574</span>
-<span class='line-number'>575</span>
-<span class='line-number'>576</span>
-<span class='line-number'>577</span>
-<span class='line-number'>578</span>
-<span class='line-number'>579</span>
-<span class='line-number'>580</span>
-<span class='line-number'>581</span>
-<span class='line-number'>582</span>
-<span class='line-number'>583</span>
-<span class='line-number'>584</span>
-<span class='line-number'>585</span>
-<span class='line-number'>586</span>
-<span class='line-number'>587</span>
-<span class='line-number'>588</span>
-<span class='line-number'>589</span>
-<span class='line-number'>590</span>
-<span class='line-number'>591</span>
-<span class='line-number'>592</span>
-<span class='line-number'>593</span>
-<span class='line-number'>594</span>
-<span class='line-number'>595</span>
-<span class='line-number'>596</span>
-<span class='line-number'>597</span>
-<span class='line-number'>598</span>
-<span class='line-number'>599</span>
-<span class='line-number'>600</span>
-<span class='line-number'>601</span>
-<span class='line-number'>602</span>
-<span class='line-number'>603</span>
-<span class='line-number'>604</span>
-<span class='line-number'>605</span>
-<span class='line-number'>606</span>
-<span class='line-number'>607</span>
-<span class='line-number'>608</span>
-<span class='line-number'>609</span>
-<span class='line-number'>610</span>
-<span class='line-number'>611</span>
-<span class='line-number'>612</span>
-<span class='line-number'>613</span>
-<span class='line-number'>614</span>
-<span class='line-number'>615</span>
-<span class='line-number'>616</span>
-<span class='line-number'>617</span>
-<span class='line-number'>618</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>-------------- DecimalType --------------
-</span><span class='line'>------- DecimalType Input
-</span><span class='line'>{'decimal': 1.2345}
-</span><span class='line'>{'decimal': 1}
-</span><span class='line'>{'decimal': 234.231}
-</span><span class='line'>{'decimal': Infinity}
-</span><span class='line'>{'decimal': -Infinity}
-</span><span class='line'>{'decimal': NaN}
-</span><span class='line'>{'decimal': '1'}
-</span><span class='line'>{'decimal': '1.2345'}
-</span><span class='line'>{'decimal': null}
-</span><span class='line'>
-</span><span class='line'>------- DecimalType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- decimal: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-----------+
-</span><span class='line'>|    decimal|
-</span><span class='line'>+-----------+
-</span><span class='line'>|     1.2345|
-</span><span class='line'>|          1|
-</span><span class='line'>|    234.231|
-</span><span class='line'>| "Infinity"|
-</span><span class='line'>|"-Infinity"|
-</span><span class='line'>|      "NaN"|
-</span><span class='line'>|          1|
-</span><span class='line'>|     1.2345|
-</span><span class='line'>|       null|
-</span><span class='line'>+-----------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- DecimalType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- decimal: decimal(6,3) (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------+
-</span><span class='line'>|decimal|
-</span><span class='line'>+-------+
-</span><span class='line'>|  1.235|
-</span><span class='line'>|  1.000|
-</span><span class='line'>|234.231|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>+-------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- BooleanType --------------
-</span><span class='line'>------- BooleanType Input
-</span><span class='line'>{'boolean': true}
-</span><span class='line'>{'boolean': false}
-</span><span class='line'>{'boolean': 'false'}
-</span><span class='line'>{'boolean': 'true'}
-</span><span class='line'>{'boolean': null}
-</span><span class='line'>{'boolean': 1}
-</span><span class='line'>{'boolean': 0}
-</span><span class='line'>{'boolean': '1'}
-</span><span class='line'>{'boolean': '0'}
-</span><span class='line'>{'boolean': 'a'}
-</span><span class='line'>
-</span><span class='line'>------- BooleanType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- boolean: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------+
-</span><span class='line'>|boolean|
-</span><span class='line'>+-------+
-</span><span class='line'>|   true|
-</span><span class='line'>|  false|
-</span><span class='line'>|  false|
-</span><span class='line'>|   true|
-</span><span class='line'>|   null|
-</span><span class='line'>|      1|
-</span><span class='line'>|      0|
-</span><span class='line'>|      1|
-</span><span class='line'>|      0|
-</span><span class='line'>|      a|
-</span><span class='line'>+-------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- BooleanType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- boolean: boolean (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------+
-</span><span class='line'>|boolean|
-</span><span class='line'>+-------+
-</span><span class='line'>|   true|
-</span><span class='line'>|  false|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>|   null|
-</span><span class='line'>+-------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- ByteType --------------
-</span><span class='line'>------- ByteType Input
-</span><span class='line'>{'byte': 'a'}
-</span><span class='line'>{'byte': 'b'}
-</span><span class='line'>{'byte': 1}
-</span><span class='line'>{'byte': 0}
-</span><span class='line'>{'byte': 5}
-</span><span class='line'>{'byte': null}
-</span><span class='line'>
-</span><span class='line'>------- ByteType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- byte: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+----+
-</span><span class='line'>|byte|
-</span><span class='line'>+----+
-</span><span class='line'>|   a|
-</span><span class='line'>|   b|
-</span><span class='line'>|   1|
-</span><span class='line'>|   0|
-</span><span class='line'>|   5|
-</span><span class='line'>|null|
-</span><span class='line'>+----+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- ByteType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- byte: byte (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+----+
-</span><span class='line'>|byte|
-</span><span class='line'>+----+
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>|   1|
-</span><span class='line'>|   0|
-</span><span class='line'>|   5|
-</span><span class='line'>|null|
-</span><span class='line'>+----+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- CalendarIntervalType --------------
-</span><span class='line'>------- CalendarIntervalType Input
-</span><span class='line'>{'calendarInterval': 'interval 2 days'}
-</span><span class='line'>{'calendarInterval': 'interval 1 week'}
-</span><span class='line'>{'calendarInterval': 'interval 5 years'}
-</span><span class='line'>{'calendarInterval': 'interval 6 months'}
-</span><span class='line'>{'calendarInterval': 10}
-</span><span class='line'>{'calendarInterval': 'interval a'}
-</span><span class='line'>{'calendarInterval': null}
-</span><span class='line'>
-</span><span class='line'>------- CalendarIntervalType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- calendarInterval: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-----------------+
-</span><span class='line'>| calendarInterval|
-</span><span class='line'>+-----------------+
-</span><span class='line'>|  interval 2 days|
-</span><span class='line'>|  interval 1 week|
-</span><span class='line'>| interval 5 years|
-</span><span class='line'>|interval 6 months|
-</span><span class='line'>|               10|
-</span><span class='line'>|       interval a|
-</span><span class='line'>|             null|
-</span><span class='line'>+-----------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- CalendarIntervalType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- calendarInterval: calendarinterval (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+----------------+
-</span><span class='line'>|calendarInterval|
-</span><span class='line'>+----------------+
-</span><span class='line'>|            null|
-</span><span class='line'>|            null|
-</span><span class='line'>|            null|
-</span><span class='line'>|            null|
-</span><span class='line'>|            null|
-</span><span class='line'>|            null|
-</span><span class='line'>|            null|
-</span><span class='line'>+----------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- DateType --------------
-</span><span class='line'>------- DateType Input
-</span><span class='line'>{'date': '2016-04-24'}
-</span><span class='line'>{'date': '0001-01-01'}
-</span><span class='line'>{'date': '9999-12-31'}
-</span><span class='line'>{'date': '2016-04-24 12:10:01'}
-</span><span class='line'>{'date': 1461496201000}
-</span><span class='line'>{'date': null}
-</span><span class='line'>
-</span><span class='line'>------- DateType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- date: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------------------+
-</span><span class='line'>|               date|
-</span><span class='line'>+-------------------+
-</span><span class='line'>|         2016-04-24|
-</span><span class='line'>|         0001-01-01|
-</span><span class='line'>|         9999-12-31|
-</span><span class='line'>|2016-04-24 12:10:01|
-</span><span class='line'>|      1461496201000|
-</span><span class='line'>|               null|
-</span><span class='line'>+-------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- DateType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- date: date (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+----------+
-</span><span class='line'>|      date|
-</span><span class='line'>+----------+
-</span><span class='line'>|2016-04-24|
-</span><span class='line'>|0001-01-01|
-</span><span class='line'>|9999-12-31|
-</span><span class='line'>|2016-04-24|
-</span><span class='line'>|      null|
-</span><span class='line'>|      null|
-</span><span class='line'>+----------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- DoubleType --------------
-</span><span class='line'>------- DoubleType Input
-</span><span class='line'>{'double': 1.23456}
-</span><span class='line'>{'double': 1}
-</span><span class='line'>{'double': 1.7976931348623157E308}
-</span><span class='line'>{'double': -1.7976931348623157E308}
-</span><span class='line'>{'double': Infinity}
-</span><span class='line'>{'double': -Infinity}
-</span><span class='line'>{'double': NaN}
-</span><span class='line'>{'double': '1'}
-</span><span class='line'>{'double': '1.23456'}
-</span><span class='line'>{'double': null}
-</span><span class='line'>
-</span><span class='line'>------- DoubleType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- double: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+--------------------+
-</span><span class='line'>|              double|
-</span><span class='line'>+--------------------+
-</span><span class='line'>|             1.23456|
-</span><span class='line'>|                   1|
-</span><span class='line'>|1.797693134862315...|
-</span><span class='line'>|-1.79769313486231...|
-</span><span class='line'>|          "Infinity"|
-</span><span class='line'>|         "-Infinity"|
-</span><span class='line'>|               "NaN"|
-</span><span class='line'>|                   1|
-</span><span class='line'>|             1.23456|
-</span><span class='line'>|                null|
-</span><span class='line'>+--------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- DoubleType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- double: double (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+--------------------+
-</span><span class='line'>|              double|
-</span><span class='line'>+--------------------+
-</span><span class='line'>|             1.23456|
-</span><span class='line'>|                 1.0|
-</span><span class='line'>|1.797693134862315...|
-</span><span class='line'>|-1.79769313486231...|
-</span><span class='line'>|            Infinity|
-</span><span class='line'>|           -Infinity|
-</span><span class='line'>|                 NaN|
-</span><span class='line'>|                null|
-</span><span class='line'>|                null|
-</span><span class='line'>|                null|
-</span><span class='line'>+--------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- FloatType --------------
-</span><span class='line'>------- FloatType Input
-</span><span class='line'>{'float': 1.23456}
-</span><span class='line'>{'float': 1}
-</span><span class='line'>{'float': 3.4028235E38}
-</span><span class='line'>{'float': -3.4028235E38}
-</span><span class='line'>{'float': Infinity}
-</span><span class='line'>{'float': -Infinity}
-</span><span class='line'>{'float': NaN}
-</span><span class='line'>{'float': '1'}
-</span><span class='line'>{'float': '1.23456'}
-</span><span class='line'>{'float': null}
-</span><span class='line'>
-</span><span class='line'>------- FloatType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- float: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------------+
-</span><span class='line'>|        float|
-</span><span class='line'>+-------------+
-</span><span class='line'>|      1.23456|
-</span><span class='line'>|            1|
-</span><span class='line'>| 3.4028235E38|
-</span><span class='line'>|-3.4028235E38|
-</span><span class='line'>|   "Infinity"|
-</span><span class='line'>|  "-Infinity"|
-</span><span class='line'>|        "NaN"|
-</span><span class='line'>|            1|
-</span><span class='line'>|      1.23456|
-</span><span class='line'>|         null|
-</span><span class='line'>+-------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- FloatType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- float: float (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------------+
-</span><span class='line'>|        float|
-</span><span class='line'>+-------------+
-</span><span class='line'>|      1.23456|
-</span><span class='line'>|          1.0|
-</span><span class='line'>| 3.4028235E38|
-</span><span class='line'>|-3.4028235E38|
-</span><span class='line'>|     Infinity|
-</span><span class='line'>|    -Infinity|
-</span><span class='line'>|          NaN|
-</span><span class='line'>|         null|
-</span><span class='line'>|         null|
-</span><span class='line'>|         null|
-</span><span class='line'>+-------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- IntegerType --------------
-</span><span class='line'>------- IntegerType Input
-</span><span class='line'>{'integer': 1}
-</span><span class='line'>{'integer': 2147483647}
-</span><span class='line'>{'integer': -2147483648}
-</span><span class='line'>{'integer': 2147483648}
-</span><span class='line'>{'integer': '1'}
-</span><span class='line'>{'integer': 1.23456}
-</span><span class='line'>{'integer': '1.23456'}
-</span><span class='line'>{'integer': null}
-</span><span class='line'>
-</span><span class='line'>------- IntegerType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- integer: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-----------+
-</span><span class='line'>|    integer|
-</span><span class='line'>+-----------+
-</span><span class='line'>|          1|
-</span><span class='line'>| 2147483647|
-</span><span class='line'>|-2147483648|
-</span><span class='line'>| 2147483648|
-</span><span class='line'>|          1|
-</span><span class='line'>|    1.23456|
-</span><span class='line'>|    1.23456|
-</span><span class='line'>|       null|
-</span><span class='line'>+-----------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- IntegerType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- integer: integer (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-----------+
-</span><span class='line'>|    integer|
-</span><span class='line'>+-----------+
-</span><span class='line'>|          1|
-</span><span class='line'>| 2147483647|
-</span><span class='line'>|-2147483648|
-</span><span class='line'>|       null|
-</span><span class='line'>|       null|
-</span><span class='line'>|       null|
-</span><span class='line'>|       null|
-</span><span class='line'>|       null|
-</span><span class='line'>+-----------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- LongType --------------
-</span><span class='line'>------- LongType Input
-</span><span class='line'>{'long': 1}
-</span><span class='line'>{'long': 9223372036854775807}
-</span><span class='line'>{'long': -9223372036854775808}
-</span><span class='line'>{'long': '1'}
-</span><span class='line'>{'long': 1.23456}
-</span><span class='line'>{'long': '1.23456'}
-</span><span class='line'>{'long': null}
-</span><span class='line'>
-</span><span class='line'>------- LongType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- long: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+--------------------+
-</span><span class='line'>|                long|
-</span><span class='line'>+--------------------+
-</span><span class='line'>|                   1|
-</span><span class='line'>| 9223372036854775807|
-</span><span class='line'>|-9223372036854775808|
-</span><span class='line'>|                   1|
-</span><span class='line'>|             1.23456|
-</span><span class='line'>|             1.23456|
-</span><span class='line'>|                null|
-</span><span class='line'>+--------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- LongType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- long: long (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+--------------------+
-</span><span class='line'>|                long|
-</span><span class='line'>+--------------------+
-</span><span class='line'>|                   1|
-</span><span class='line'>| 9223372036854775807|
-</span><span class='line'>|-9223372036854775808|
-</span><span class='line'>|                null|
-</span><span class='line'>|                null|
-</span><span class='line'>|                null|
-</span><span class='line'>|                null|
-</span><span class='line'>+--------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- MapType --------------
-</span><span class='line'>------- MapType Input
-</span><span class='line'>{'map': {'a_key': 'a value', 'b_key': 'b value'}}
-</span><span class='line'>{'map': {'key': 1, 'key1': null}}
-</span><span class='line'>{'map': null}
-</span><span class='line'>
-</span><span class='line'>------- MapType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- map: struct (nullable = true)
-</span><span class='line'> |    |-- a_key: string (nullable = true)
-</span><span class='line'> |    |-- b_key: string (nullable = true)
-</span><span class='line'> |    |-- key: long (nullable = true)
-</span><span class='line'> |    |-- key1: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+--------------------+
-</span><span class='line'>|                 map|
-</span><span class='line'>+--------------------+
-</span><span class='line'>|[a value,b value,...|
-</span><span class='line'>|  [null,null,1,null]|
-</span><span class='line'>|                null|
-</span><span class='line'>+--------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- MapType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- map: map (nullable = true)
-</span><span class='line'> |    |-- key: string
-</span><span class='line'> |    |-- value: string (valueContainsNull = true)
-</span><span class='line'>
-</span><span class='line'>+--------------------+
-</span><span class='line'>|                 map|
-</span><span class='line'>+--------------------+
-</span><span class='line'>|Map(a_key -&gt; a va...|
-</span><span class='line'>|Map(key -&gt; 1, key...|
-</span><span class='line'>|                null|
-</span><span class='line'>+--------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- NullType --------------
-</span><span class='line'>------- NullType Input
-</span><span class='line'>{'null': null}
-</span><span class='line'>{'null': true}
-</span><span class='line'>{'null': false}
-</span><span class='line'>{'null': 1}
-</span><span class='line'>{'null': 0}
-</span><span class='line'>{'null': '1'}
-</span><span class='line'>{'null': '0'}
-</span><span class='line'>{'null': 'a'}
-</span><span class='line'>
-</span><span class='line'>------- NullType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- null: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-----+
-</span><span class='line'>| null|
-</span><span class='line'>+-----+
-</span><span class='line'>| null|
-</span><span class='line'>| true|
-</span><span class='line'>|false|
-</span><span class='line'>|    1|
-</span><span class='line'>|    0|
-</span><span class='line'>|    1|
-</span><span class='line'>|    0|
-</span><span class='line'>|    a|
-</span><span class='line'>+-----+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- NullType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- null: null (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+----+
-</span><span class='line'>|null|
-</span><span class='line'>+----+
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>|null|
-</span><span class='line'>+----+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- ShortType --------------
-</span><span class='line'>------- ShortType Input
-</span><span class='line'>{'short': 0}
-</span><span class='line'>{'short': 1}
-</span><span class='line'>{'short': 32767}
-</span><span class='line'>{'short': -32768}
-</span><span class='line'>{'short': 32768}
-</span><span class='line'>{'short': 1.23456}
-</span><span class='line'>{'short': '0'}
-</span><span class='line'>{'short': '1'}
-</span><span class='line'>{'short': '1.23456'}
-</span><span class='line'>{'short': null}
-</span><span class='line'>
-</span><span class='line'>------- ShortType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- short: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------+
-</span><span class='line'>|  short|
-</span><span class='line'>+-------+
-</span><span class='line'>|      0|
-</span><span class='line'>|      1|
-</span><span class='line'>|  32767|
-</span><span class='line'>| -32768|
-</span><span class='line'>|  32768|
-</span><span class='line'>|1.23456|
-</span><span class='line'>|      0|
-</span><span class='line'>|      1|
-</span><span class='line'>|1.23456|
-</span><span class='line'>|   null|
-</span><span class='line'>+-------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- ShortType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- short: short (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+------+
-</span><span class='line'>| short|
-</span><span class='line'>+------+
-</span><span class='line'>|     0|
-</span><span class='line'>|     1|
-</span><span class='line'>| 32767|
-</span><span class='line'>|-32768|
-</span><span class='line'>|  null|
-</span><span class='line'>|  null|
-</span><span class='line'>|  null|
-</span><span class='line'>|  null|
-</span><span class='line'>|  null|
-</span><span class='line'>|  null|
-</span><span class='line'>+------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>-------------- TimestampType --------------
-</span><span class='line'>------- TimestampType Input
-</span><span class='line'>{'timestamp': '2016-04-24'}
-</span><span class='line'>{'timestamp': '2016-04-24 12:10:01'}
-</span><span class='line'>{'timestamp': 1461496201000}
-</span><span class='line'>{'timestamp': '0001-01-01'}
-</span><span class='line'>{'timestamp': '9999-12-31'}
-</span><span class='line'>{'timestamp': null}
-</span><span class='line'>
-</span><span class='line'>------- TimestampType Inferred Schema
-</span><span class='line'>root
-</span><span class='line'> |-- timestamp: string (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+-------------------+
-</span><span class='line'>|          timestamp|
-</span><span class='line'>+-------------------+
-</span><span class='line'>|         2016-04-24|
-</span><span class='line'>|2016-04-24 12:10:01|
-</span><span class='line'>|      1461496201000|
-</span><span class='line'>|         0001-01-01|
-</span><span class='line'>|         9999-12-31|
-</span><span class='line'>|               null|
-</span><span class='line'>+-------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>------- TimestampType Set Schema
-</span><span class='line'>root
-</span><span class='line'> |-- timestamp: timestamp (nullable = true)
-</span><span class='line'>
-</span><span class='line'>+--------------------+
-</span><span class='line'>|           timestamp|
-</span><span class='line'>+--------------------+
-</span><span class='line'>|2016-04-24 00:00:...|
-</span><span class='line'>|2016-04-24 12:10:...|
-</span><span class='line'>|2016-04-24 12:10:...|
-</span><span class='line'>|0001-01-01 00:00:...|
-</span><span class='line'>|9999-12-31 00:00:...|
-</span><span class='line'>|                null|
-</span><span class='line'>+--------------------+
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>
-</span></code></pre></td></tr></table></div></figure>
+------- DecimalType Inferred Schema
+root
+ |-- decimal: string (nullable = true)
 
-</div>
++-----------+
+|    decimal|
++-----------+
+|     1.2345|
+|          1|
+|    234.231|
+| "Infinity"|
+|"-Infinity"|
+|      "NaN"|
+|          1|
+|     1.2345|
+|       null|
++-----------+
 
 
-  <footer>
-    <p class="meta">
-      
-  
+------- DecimalType Set Schema
+root
+ |-- decimal: decimal(6,3) (nullable = true)
 
-<span class="byline author vcard">Posted by <span class="fn">Dyana Rose</span></span>
++-------+
+|decimal|
++-------+
+|  1.235|
+|  1.000|
+|234.231|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
++-------+
 
-      
+
+
+-------------- BooleanType --------------
+------- BooleanType Input
+{'boolean': true}
+{'boolean': false}
+{'boolean': 'false'}
+{'boolean': 'true'}
+{'boolean': null}
+{'boolean': 1}
+{'boolean': 0}
+{'boolean': '1'}
+{'boolean': '0'}
+{'boolean': 'a'}
+
+------- BooleanType Inferred Schema
+root
+ |-- boolean: string (nullable = true)
+
++-------+
+|boolean|
++-------+
+|   true|
+|  false|
+|  false|
+|   true|
+|   null|
+|      1|
+|      0|
+|      1|
+|      0|
+|      a|
++-------+
+
+
+------- BooleanType Set Schema
+root
+ |-- boolean: boolean (nullable = true)
+
++-------+
+|boolean|
++-------+
+|   true|
+|  false|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
++-------+
+
+
+
+-------------- ByteType --------------
+------- ByteType Input
+{'byte': 'a'}
+{'byte': 'b'}
+{'byte': 1}
+{'byte': 0}
+{'byte': 5}
+{'byte': null}
+
+------- ByteType Inferred Schema
+root
+ |-- byte: string (nullable = true)
+
++----+
+|byte|
++----+
+|   a|
+|   b|
+|   1|
+|   0|
+|   5|
+|null|
++----+
+
+
+------- ByteType Set Schema
+root
+ |-- byte: byte (nullable = true)
+
++----+
+|byte|
++----+
+|null|
+|null|
+|   1|
+|   0|
+|   5|
+|null|
++----+
+
+
+
+-------------- CalendarIntervalType --------------
+------- CalendarIntervalType Input
+{'calendarInterval': 'interval 2 days'}
+{'calendarInterval': 'interval 1 week'}
+{'calendarInterval': 'interval 5 years'}
+{'calendarInterval': 'interval 6 months'}
+{'calendarInterval': 10}
+{'calendarInterval': 'interval a'}
+{'calendarInterval': null}
+
+------- CalendarIntervalType Inferred Schema
+root
+ |-- calendarInterval: string (nullable = true)
+
++-----------------+
+| calendarInterval|
++-----------------+
+|  interval 2 days|
+|  interval 1 week|
+| interval 5 years|
+|interval 6 months|
+|               10|
+|       interval a|
+|             null|
++-----------------+
+
+
+------- CalendarIntervalType Set Schema
+root
+ |-- calendarInterval: calendarinterval (nullable = true)
+
++----------------+
+|calendarInterval|
++----------------+
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
++----------------+
+
+
+
+-------------- DateType --------------
+------- DateType Input
+{'date': '2016-04-24'}
+{'date': '0001-01-01'}
+{'date': '9999-12-31'}
+{'date': '2016-04-24 12:10:01'}
+{'date': 1461496201000}
+{'date': null}
+
+------- DateType Inferred Schema
+root
+ |-- date: string (nullable = true)
+
++-------------------+
+|               date|
++-------------------+
+|         2016-04-24|
+|         0001-01-01|
+|         9999-12-31|
+|2016-04-24 12:10:01|
+|      1461496201000|
+|               null|
++-------------------+
+
+
+------- DateType Set Schema
+root
+ |-- date: date (nullable = true)
+
++----------+
+|      date|
++----------+
+|2016-04-24|
+|0001-01-01|
+|9999-12-31|
+|2016-04-24|
+|      null|
+|      null|
++----------+
+
+
+
+-------------- DoubleType --------------
+------- DoubleType Input
+{'double': 1.23456}
+{'double': 1}
+{'double': 1.7976931348623157E308}
+{'double': -1.7976931348623157E308}
+{'double': Infinity}
+{'double': -Infinity}
+{'double': NaN}
+{'double': '1'}
+{'double': '1.23456'}
+{'double': null}
+
+------- DoubleType Inferred Schema
+root
+ |-- double: string (nullable = true)
+
++--------------------+
+|              double|
++--------------------+
+|             1.23456|
+|                   1|
+|1.797693134862315...|
+|-1.79769313486231...|
+|          "Infinity"|
+|         "-Infinity"|
+|               "NaN"|
+|                   1|
+|             1.23456|
+|                null|
++--------------------+
+
+
+------- DoubleType Set Schema
+root
+ |-- double: double (nullable = true)
+
++--------------------+
+|              double|
++--------------------+
+|             1.23456|
+|                 1.0|
+|1.797693134862315...|
+|-1.79769313486231...|
+|            Infinity|
+|           -Infinity|
+|                 NaN|
+|                null|
+|                null|
+|                null|
++--------------------+
+
+
+
+-------------- FloatType --------------
+------- FloatType Input
+{'float': 1.23456}
+{'float': 1}
+{'float': 3.4028235E38}
+{'float': -3.4028235E38}
+{'float': Infinity}
+{'float': -Infinity}
+{'float': NaN}
+{'float': '1'}
+{'float': '1.23456'}
+{'float': null}
+
+------- FloatType Inferred Schema
+root
+ |-- float: string (nullable = true)
+
++-------------+
+|        float|
++-------------+
+|      1.23456|
+|            1|
+| 3.4028235E38|
+|-3.4028235E38|
+|   "Infinity"|
+|  "-Infinity"|
+|        "NaN"|
+|            1|
+|      1.23456|
+|         null|
++-------------+
+
+
+------- FloatType Set Schema
+root
+ |-- float: float (nullable = true)
+
++-------------+
+|        float|
++-------------+
+|      1.23456|
+|          1.0|
+| 3.4028235E38|
+|-3.4028235E38|
+|     Infinity|
+|    -Infinity|
+|          NaN|
+|         null|
+|         null|
+|         null|
++-------------+
+
+
+
+-------------- IntegerType --------------
+------- IntegerType Input
+{'integer': 1}
+{'integer': 2147483647}
+{'integer': -2147483648}
+{'integer': 2147483648}
+{'integer': '1'}
+{'integer': 1.23456}
+{'integer': '1.23456'}
+{'integer': null}
+
+------- IntegerType Inferred Schema
+root
+ |-- integer: string (nullable = true)
+
++-----------+
+|    integer|
++-----------+
+|          1|
+| 2147483647|
+|-2147483648|
+| 2147483648|
+|          1|
+|    1.23456|
+|    1.23456|
+|       null|
++-----------+
+
+
+------- IntegerType Set Schema
+root
+ |-- integer: integer (nullable = true)
+
++-----------+
+|    integer|
++-----------+
+|          1|
+| 2147483647|
+|-2147483648|
+|       null|
+|       null|
+|       null|
+|       null|
+|       null|
++-----------+
+
+
+
+-------------- LongType --------------
+------- LongType Input
+{'long': 1}
+{'long': 9223372036854775807}
+{'long': -9223372036854775808}
+{'long': '1'}
+{'long': 1.23456}
+{'long': '1.23456'}
+{'long': null}
+
+------- LongType Inferred Schema
+root
+ |-- long: string (nullable = true)
+
++--------------------+
+|                long|
++--------------------+
+|                   1|
+| 9223372036854775807|
+|-9223372036854775808|
+|                   1|
+|             1.23456|
+|             1.23456|
+|                null|
++--------------------+
+
+
+------- LongType Set Schema
+root
+ |-- long: long (nullable = true)
+
++--------------------+
+|                long|
++--------------------+
+|                   1|
+| 9223372036854775807|
+|-9223372036854775808|
+|                null|
+|                null|
+|                null|
+|                null|
++--------------------+
+
+
+
+-------------- MapType --------------
+------- MapType Input
+{'map': {'a_key': 'a value', 'b_key': 'b value'}}
+{'map': {'key': 1, 'key1': null}}
+{'map': null}
+
+------- MapType Inferred Schema
+root
+ |-- map: struct (nullable = true)
+ |    |-- a_key: string (nullable = true)
+ |    |-- b_key: string (nullable = true)
+ |    |-- key: long (nullable = true)
+ |    |-- key1: string (nullable = true)
+
++--------------------+
+|                 map|
++--------------------+
+|[a value,b value,...|
+|  [null,null,1,null]|
+|                null|
++--------------------+
+
+
+------- MapType Set Schema
+root
+ |-- map: map (nullable = true)
+ |    |-- key: string
+ |    |-- value: string (valueContainsNull = true)
+
++--------------------+
+|                 map|
++--------------------+
+|Map(a_key -&gt; a va...|
+|Map(key -&gt; 1, key...|
+|                null|
++--------------------+
+
+
+
+-------------- NullType --------------
+------- NullType Input
+{'null': null}
+{'null': true}
+{'null': false}
+{'null': 1}
+{'null': 0}
+{'null': '1'}
+{'null': '0'}
+{'null': 'a'}
+
+------- NullType Inferred Schema
+root
+ |-- null: string (nullable = true)
+
++-----+
+| null|
++-----+
+| null|
+| true|
+|false|
+|    1|
+|    0|
+|    1|
+|    0|
+|    a|
++-----+
+
+
+------- NullType Set Schema
+root
+ |-- null: null (nullable = true)
+
++----+
+|null|
++----+
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
++----+
+
+
+
+-------------- ShortType --------------
+------- ShortType Input
+{'short': 0}
+{'short': 1}
+{'short': 32767}
+{'short': -32768}
+{'short': 32768}
+{'short': 1.23456}
+{'short': '0'}
+{'short': '1'}
+{'short': '1.23456'}
+{'short': null}
+
+------- ShortType Inferred Schema
+root
+ |-- short: string (nullable = true)
+
++-------+
+|  short|
++-------+
+|      0|
+|      1|
+|  32767|
+| -32768|
+|  32768|
+|1.23456|
+|      0|
+|      1|
+|1.23456|
+|   null|
++-------+
+
+
+------- ShortType Set Schema
+root
+ |-- short: short (nullable = true)
+
++------+
+| short|
++------+
+|     0|
+|     1|
+| 32767|
+|-32768|
+|  null|
+|  null|
+|  null|
+|  null|
+|  null|
+|  null|
++------+
+
+
+
+-------------- TimestampType --------------
+------- TimestampType Input
+{'timestamp': '2016-04-24'}
+{'timestamp': '2016-04-24 12:10:01'}
+{'timestamp': 1461496201000}
+{'timestamp': '0001-01-01'}
+{'timestamp': '9999-12-31'}
+{'timestamp': null}
+
+------- TimestampType Inferred Schema
+root
+ |-- timestamp: string (nullable = true)
+
++-------------------+
+|          timestamp|
++-------------------+
+|         2016-04-24|
+|2016-04-24 12:10:01|
+|      1461496201000|
+|         0001-01-01|
+|         9999-12-31|
+|               null|
++-------------------+
+
+
+------- TimestampType Set Schema
+root
+ |-- timestamp: timestamp (nullable = true)
+
++--------------------+
+|           timestamp|
++--------------------+
+|2016-04-24 00:00:...|
+|2016-04-24 12:10:...|
+|2016-04-24 12:10:...|
+|0001-01-01 00:00:...|
+|9999-12-31 00:00:...|
+|                null|
++--------------------+
 
 
 
 
+</code></pre></div></div>
 
-
-
-
-  
-
-
-<time datetime="2016-04-09T12:57:06+01:00" pubdate data-updated="true">Apr 9<sup>th</sup>, 2016</time>
-      
-
-<span class="categories">
-  
-    <a class='category' href='/blog/categories/apache-spark/'>apache spark</a>, <a class='category' href='/blog/categories/spark-sql/'>spark sql</a>
-  
-</span>
-
-
-    </p>
-    
-      <div class="sharing">
-  
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/" data-via="dyanarose" data-counturl="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/" >Tweet</a>
-  
-  
-  
-</div>
-
-    
-    <p class="meta">
-      
-        <a class="basic-alignment left" href="/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/" title="Previous Post: Preventing Duplication when Creating Relationships in Neo4j">&laquo; Preventing Duplication when Creating Relationships in Neo4j</a>
-      
-      
-        <a class="basic-alignment right" href="/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/" title="Next Post: so you need to edit a parquet file">so you need to edit a parquet file &raquo;</a>
-      
-    </p>
-  </footer>
+  </div><a class="u-url" href="/blog/2016/04/09/exploring-spark-sql-datatypes/" hidden></a>
 </article>
 
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col">
+        <p class="feed-subscribe">
+          <a href="/feed.xml">
+            <svg class="svg-icon orange">
+              <use xlink:href="/assets/minima-social-icons.svg#rss"></use>
+            </svg><span>Subscribe</span>
+          </a>
+        </p>
+        <ul class="contact-list">
+          
+        </ul>
+      </div>
+      <div class="footer-col">
+        <p></p>
+      </div>
+    </div>
+
+    <div class="social-links"><ul class="social-media-list"><li><a rel="me" href="https://github.com/dyanarose" target="_blank" title="dyanarose"><svg class="svg-icon grey"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg></a></li><li><a rel="me" href="https://twitter.com/dyanarose" target="_blank" title="dyanarose"><svg class="svg-icon grey"><use xlink:href="/assets/minima-social-icons.svg#twitter"></use></svg></a></li></ul>
 </div>
 
-<aside class="sidebar">
-  
-    <section>
-  <h1>Recent Posts</h1>
-  <ul id="recent_posts">
-    
-      <li class="post">
-        <a href="/blog/2017/11/05/building-and-showing/">Building and Showing</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/">Graceful Shutdown of Java Apps Under Docker</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/">So You Need to Edit a Parquet File</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2016/04/09/exploring-spark-sql-datatypes/">Exploring Spark SQL DataTypes</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/">Preventing Duplication When Creating Relationships in Neo4j</a>
-      </li>
-    
-  </ul>
-</section>
-
-<section>
-  <h1>GitHub Repos</h1>
-  <ul id="gh_repos">
-    <li class="loading">Status updating...</li>
-  </ul>
-  
-  <a href="https://github.com/dyanarose">@dyanarose</a> on GitHub
-  
-  <script type="text/javascript">
-    $(document).ready(function(){
-        if (!window.jXHR){
-            var jxhr = document.createElement('script');
-            jxhr.type = 'text/javascript';
-            jxhr.src = '/javascripts/libs/jXHR.js';
-            var s = document.getElementsByTagName('script')[0];
-            s.parentNode.insertBefore(jxhr, s);
-        }
-
-        github.showRepos({
-            user: 'dyanarose',
-            count: 0,
-            skip_forks: true,
-            target: '#gh_repos'
-        });
-    });
-  </script>
-  <script src="/javascripts/github.js" type="text/javascript"> </script>
-</section>
-
-
-
-
-
-  
-</aside>
-
-
-    </div>
   </div>
-  <footer role="contentinfo"><p>
-  Copyright &copy; 2017 - Dyana Rose -
-  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
-</p>
 
 </footer>
-  
-
-
-
-
-
-
-
-  <script type="text/javascript">
-    (function(){
-      var twitterWidgets = document.createElement('script');
-      twitterWidgets.type = 'text/javascript';
-      twitterWidgets.async = true;
-      twitterWidgets.src = '//platform.twitter.com/widgets.js';
-      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
-    })();
-  </script>
-
-
-
-
-
 </body>
+
 </html>

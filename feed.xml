@@ -1,0 +1,1038 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="http://dyanarose.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="http://dyanarose.github.io/" rel="alternate" type="text/html" /><updated>2022-06-09T21:47:43+01:00</updated><id>http://dyanarose.github.io/feed.xml</id><title type="html">These Things Happen</title><author><name>Dyana Rose</name></author><entry><title type="html">Building and Showing</title><link href="http://dyanarose.github.io/blog/2017/11/05/building-and-showing/" rel="alternate" type="text/html" title="Building and Showing" /><published>2017-11-05T10:57:57+00:00</published><updated>2017-11-05T10:57:57+00:00</updated><id>http://dyanarose.github.io/blog/2017/11/05/building-and-showing</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/11/05/building-and-showing/">&lt;p&gt;On and off I’ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I’ve never publicly linked to it.&lt;/p&gt;
+
+&lt;p&gt;Part of the reason is that it’s not a finished product and I’m not a web designer. But why should that stop me, eh? It’s already been an interesting product involving:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;a service retrieving the data from the GW2 API&lt;/li&gt;
+  &lt;li&gt;optimising sql to calculate the candlesticks quickly&lt;/li&gt;
+  &lt;li&gt;an RTL service that takes old data and moves to a better long term storage format and then populates a cache&lt;/li&gt;
+  &lt;li&gt;a website which must merge cached and uncached data before returning the candlesticks back to the caller.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;It didn’t start out with 2 services, a website, and a cache though. It started with a program, written in Go that would call an endpoint once an hour and then save the results in a sqlite database.&lt;/p&gt;
+
+&lt;p&gt;At that time I didn’t know what I wanted to do with the data, I just knew I wanted to do &lt;em&gt;something&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Eventually, that something became me answering the question ‘what questions do I want the answers to?’ As it turns out, what I want is to answer yet another question, ‘should I buy, sell, or make this item, and should I do it now.’ Now this question I could answer! But my tools at the time would become problematic.&lt;/p&gt;
+
+&lt;p&gt;I chose to display historical data using candlestick charts, as I like the view of how prices are moving in a given time period. Calculating open, close, min and max using sqlite proved to be an interesting problem. It was possible though, with some sub-queries, and with some tradeoffs. For example I could only get results for one item at a time, and the larger the dataset, the slower the calculation got. But, most importantly, it gave me a place to start. And it worked!&lt;/p&gt;
+
+&lt;p&gt;Once the requirements started shaking out, infrastructure changes became frequent. I was inside the AWS free tier, but as the sqlite file grew, I started to get worried about EBS storage and keeping things free. So my architecture had to change and I moved to using RDS and PostgreSQL.&lt;/p&gt;
+
+&lt;p&gt;Then the fact that the data, once inserted into PostgreSQL, was effectivley dead, started grating on me, and also filling up my free tier allotments of space in RDS.&lt;/p&gt;
+
+&lt;p&gt;So I brought in an RTL process to take the dead data out of PostgreSQL, store it more efficiently, and use it to populate a cache.&lt;/p&gt;
+
+&lt;p&gt;And then the cache grew too fast and I started seeing evictions. But new problem means new solution. I needed a better way (or even a way) of compressing the data going into the cache. I’ve worked with Protobuf before so after a bit of a search around to see if Avro would be an immediate better fit, I decided to go with compression via Protobuf. I also reworked the structure of the stored data, because once it was compressed, the keys were still a major source of bloat. And that worked beautifully. I went from being able to store a few months of data to at few years.&lt;/p&gt;
+
+&lt;p&gt;And that’s where things stand right now. The UI isn’t much to talk about but it’s clean (sparse some may say) and it’s pretty zippy. Which is a long way from the minutes it used to take to load only a single month of data.&lt;/p&gt;
+
+&lt;p&gt;http://www.gw2roar.com&lt;/p&gt;
+
+&lt;p&gt;I’m going to continue to talk more about the choices I made, and continue to make, and why I had to make them with this project. For example, the significant work around keeping both cache and database sizes sane, automating the ETL process, automating deployments, and anything that comes next.&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">On and off I’ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I’ve never publicly linked to it.</summary></entry><entry><title type="html">graceful shutdown of java apps under docker</title><link href="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" rel="alternate" type="text/html" title="graceful shutdown of java apps under docker" /><published>2017-08-26T13:39:00+01:00</published><updated>2017-08-26T13:39:00+01:00</updated><id>http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/">&lt;p&gt;tl;dr &lt;a href=&quot;https://github.com/dyanarose/application-interrupts&quot;&gt;application-interrupts&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.&lt;/p&gt;
+
+&lt;p&gt;This app has a main loop that receives messages off an AWS SQS queue, processes those messages, takes action if required (making a put request to a third party), and then deletes the messages off the queue.&lt;/p&gt;
+
+&lt;p&gt;Each action must only ever send a unique record to the api. Because the third party doesn’t expose any unique identifier for a record, though it does provide an endpoint to get a list of all existing records, the application itself must handle the idea of uniqueness.&lt;/p&gt;
+
+&lt;p&gt;So, in the case of a double whammy of my app being shut down after taking action, but before deleting the message from the queue, and the third party being slow to update the list of previous requests, I could end up sending duplicate records when the new app starts up.&lt;/p&gt;
+
+&lt;h2 id=&quot;no-problem-weve-got-sigterm&quot;&gt;No problem, we’ve got SIGTERM&lt;/h2&gt;
+&lt;p&gt;When &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;docker stop&lt;/code&gt; is called on a container, SIGTERM is sent to PID 1, and in Java a &lt;a href=&quot;https://docs.oracle.com/javase/8/docs/technotes/guides/lang/hook-design.html&quot;&gt;shutdown hook&lt;/a&gt; is used to catch the SIGTERM and clean up any resources before finally stopping.&lt;/p&gt;
+
+&lt;p&gt;In this case though, it’s not resources that need cleaning up. This is a continuously running application that needs to finish any work currently in process before returning out of the main loop and stopping.&lt;/p&gt;
+
+&lt;p&gt;As it happens, Java has a good way of letting a Thread know that the application would like it to shut down before it starts its next itteration of work.&lt;/p&gt;
+
+&lt;h2 id=&quot;interrupts&quot;&gt;Interrupts&lt;/h2&gt;
+&lt;p&gt;A Thread in Java has an &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;interrupted&lt;/code&gt; method which returns true if the Thread has been interrupted since the last time &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Thread.interrupted()&lt;/code&gt; was called.
+(more on &lt;a href=&quot;https://docs.oracle.com/javase/tutorial/essential/concurrency/interrupt.html&quot;&gt;Interrupts&lt;/a&gt;)&lt;/p&gt;
+
+&lt;h3 id=&quot;why-are-interrupts-useful&quot;&gt;Why are interrupts useful&lt;/h3&gt;
+
+&lt;p&gt;In the main loop a condition of &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;while(!Thread.interrupted())&lt;/code&gt; will allow the while block to run to completion, but also prevent the next execution if an interrupt occured during the previous run, which is exactly what needs to happen to allow messages to complete processing before the app shuts down.&lt;/p&gt;
+
+&lt;h4 id=&quot;how-to-interrupt-a-thread&quot;&gt;How to interrupt a thread&lt;/h4&gt;
+
+&lt;p&gt;The short answer is ‘by invoking &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Thread.interrupt&lt;/code&gt;’ in the shutdown hook.&lt;/p&gt;
+
+&lt;div class=&quot;language-java highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kd&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;kd&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;threadInterruptedOnShutdown&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;long&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeout&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// Setting interrupt doesn't cause the application to wait for the thread to exit.&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// The statements inside the interrupt block in the loop may or may not be executed.&lt;/span&gt;
+    &lt;span class=&quot;nc&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;threadInterruptedOnShutdown wait &quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeout&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;nc&quot;&gt;Thread&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Thread&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;RunnableLoop&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeout&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;start&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;nc&quot;&gt;Runtime&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getRuntime&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;addShutdownHook&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Thread&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;nc&quot;&gt;System&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;out&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;println&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot; thread: setting interrupt&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;interrupt&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+        &lt;span class=&quot;nc&quot;&gt;System&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;out&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;println&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot; thread: shutting down&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}));&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Just calling interrupt on a Thread doesn’t give the control needed to ensure the current work is completed. It doesn’t necessarily wait on the Thread to exit before letting the application shut down. There’s no reason you couldn’t write the code to handle this of course, but the &lt;a href=&quot;https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ExecutorService.html&quot;&gt;ExecutorService&lt;/a&gt; already provides that for us.&lt;/p&gt;
+
+&lt;p&gt;When submitting a Runnable (or Callable) to the ExecutorService, a handle for a Future is returned. Working together, the Future and the ExecutorService give control over interrupting Threads, waiting for them to exit, and if anything fails to exit, providing an opportunity to do any damage control.&lt;/p&gt;
+
+&lt;div class=&quot;language-java highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kd&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;kd&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;futureFromExecutorService&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;long&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeout&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// the executor service submit method allows us to get a handle on the thread&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// via a future and set the interrupt in the shutdown hook&lt;/span&gt;
+    &lt;span class=&quot;nc&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;futureFromExecutorService wait &quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeout&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;nc&quot;&gt;ExecutorService&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;service&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Executors&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;newSingleThreadExecutor&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+
+    &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;?&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;app&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;service&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;submit&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;RunnableLoop&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeout&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+
+    &lt;span class=&quot;nc&quot;&gt;Runtime&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getRuntime&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;addShutdownHook&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Thread&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;nc&quot;&gt;System&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;out&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;println&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot; thread: setting interrupt&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;app&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;cancel&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;service&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;shutdown&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+
+        &lt;span class=&quot;k&quot;&gt;try&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+            &lt;span class=&quot;c1&quot;&gt;// give the thread time to shutdown. This needs to be comfortably less than the&lt;/span&gt;
+            &lt;span class=&quot;c1&quot;&gt;// time the docker stop command will wait for a container to terminate on its own&lt;/span&gt;
+            &lt;span class=&quot;c1&quot;&gt;// before forcibly killing it.&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(!&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;service&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;awaitTermination&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;7&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;TimeUnit&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;SECONDS&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;))&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+                &lt;span class=&quot;nc&quot;&gt;System&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;out&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;println&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot; thread: did not shutdown in time, forcing service shutdown&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+                &lt;span class=&quot;n&quot;&gt;service&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;shutdownNow&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+            &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+                &lt;span class=&quot;nc&quot;&gt;System&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;out&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;println&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot; thread: shutdown cleanly&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+            &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+        &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;catch&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nc&quot;&gt;InterruptedException&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+            &lt;span class=&quot;nc&quot;&gt;System&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;out&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;println&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot; thread: shutdown timer interrupted, forcing service shutdown&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+            &lt;span class=&quot;n&quot;&gt;service&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;shutdownNow&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+        &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}));&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;To interrupt the Thread when SIGTERM is received, inside the shutdown hook call &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.cancel(true)&lt;/code&gt; on the Future. The boolean parameter allows the cancel method to interrupt a running Thread. Without that parameter, the Thread will not be interrupted.&lt;/p&gt;
+
+&lt;p&gt;Once the Future is cancelled, the service can begin shutting down. The ExecutorService has two types of shutdown. &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.shutdown()&lt;/code&gt; will stop any more work from being submitted to the service while allowing existing work to execute. &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.shutdownNow()&lt;/code&gt; on the other hand actively attempts to stop all running tasks.&lt;/p&gt;
+
+&lt;p&gt;After calling &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.shutdown()&lt;/code&gt; use the ExecutorService’s &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.awaitTermination&lt;/code&gt; method to both give the Threads time to finish any current work and also to handle those that do not return in time. Set the timout argument to be less than that of the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;docker stop&lt;/code&gt; command so that there will be time to do damage control and attempt a final &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.shutdownNow()&lt;/code&gt; before docker kills the container for being non-responsive.&lt;/p&gt;
+
+&lt;p&gt;All together, this allows a continously running application to respond to shutdown requests in a timely manner and also complete the work that is currently in process.&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">tl;dr application-interrupts</summary></entry><entry><title type="html">so you need to edit a parquet file</title><link href="http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/" rel="alternate" type="text/html" title="so you need to edit a parquet file" /><published>2017-08-04T11:40:32+01:00</published><updated>2017-08-04T11:40:32+01:00</updated><id>http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/">&lt;p&gt;You’ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?&lt;/p&gt;
+
+&lt;p&gt;tl;dr: &lt;a href=&quot;https://github.com/dyanarose/parquet-edit-examples&quot;&gt;spark-edit-examples&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;its-all-immutable&quot;&gt;It’s all immutable&lt;/h3&gt;
+
+&lt;p&gt;The problem we have when we need to edit the data is that our data structures are immutable.&lt;/p&gt;
+
+&lt;p&gt;You can add partitions to Parquet files, but you can’t edit the data in place. Spark DataFrames are immutable.&lt;/p&gt;
+
+&lt;p&gt;But ultimately we can mutate the data, we just need to accept that we won’t be doing it in place. We will need to recreate the Parquet files using a combination of schemas and UDFs to correct the bad data.&lt;/p&gt;
+
+&lt;h2 id=&quot;schemas&quot;&gt;Schemas&lt;/h2&gt;
+
+&lt;p&gt;Reading in data using a schema gives you a lot of power over the resultant structure of the DataFrame (not to mention it makes reading in json files a lot faster, and will allow you to union compatible Parquet files)&lt;/p&gt;
+
+&lt;h4 id=&quot;case-1-i-need-to-drop-an-entire-column&quot;&gt;Case 1: I need to drop an entire column&lt;/h4&gt;
+&lt;p&gt;To drop an entire column, read the data in with a schema that doesn’t contain that column. When you write the DataFrame back out, the column will no longer exist&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/ColumnTransform.scala&quot;&gt;ColumnTransform.scala&lt;/a&gt;&lt;/p&gt;
+
+&lt;div class=&quot;language-scala highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;object&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;ColumnTransform&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;transform&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SparkSession&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Unit&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// read in the data with a new schema&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;ColumnDropSchema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// write out the final edited data&lt;/span&gt;
+    &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h4 id=&quot;case-2-i-need-to-drop-full-rows-of-data&quot;&gt;Case 2: I need to drop full rows of data&lt;/h4&gt;
+&lt;p&gt;To drop full rows, read in the data and select the data you want to save into a new DataFrame using a where clause. When you write the new DataFrame it will only have the rows that match the where clause.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/WhereTransform.scala&quot;&gt;WhereTransform.scala&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&quot;language-scala highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;object&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;WhereTransform&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;transform&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SparkSession&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Unit&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;RawDataSchema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// select only the good data rows&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;where&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField is null&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// write out the final edited data&lt;/span&gt;
+    &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;user-defined-functions-udfs&quot;&gt;User Defined Functions (UDFs)&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://blog.cloudera.com/blog/2017/02/working-with-udfs-in-apache-spark/&quot;&gt;UDFs in Spark&lt;/a&gt; are used to apply functions to a row of data. The result of the UDF becomes the field value.&lt;/p&gt;
+
+&lt;p&gt;Note that when using UDFs you must alias the resultant column otherwise it will end up renamed similar to &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;UDF(fieldName)&lt;/code&gt;&lt;/p&gt;
+
+&lt;h4 id=&quot;case-3-i-need-to-edit-the-value-of-a-simple-type-string-boolean-&quot;&gt;Case 3: I need to edit the value of a simple type (String, Boolean, …)&lt;/h4&gt;
+&lt;p&gt;To edit a simple type you first need to create a function that takes and returns the same type.&lt;/p&gt;
+
+&lt;p&gt;This function is then registered for use as a UDF and it can then be applied to a field in a select clause&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/SimpleTransform.scala&quot;&gt;SimpleTransform.scala&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&quot;language-scala highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;object&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;SimpleTransform&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;transform&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SparkSession&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Unit&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;RawDataSchema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// take in a String, return a String&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// cleanFunc takes the String field value and return the empty string in its place&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// you can interrogate the value and return any String here&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;cleanFunc&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;_&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// register the func as a udf&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;clean&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;udf&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cleanFunc&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// required for the $ column syntax&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;spark.sqlContext.implicits._&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// if you have data that doesn't need editing, you can separate it out&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// The data will need to be in a form that can be unioned with the edited data&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// That can be done by selecting out the fields in the same way in both the good and transformed data sets.&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;alreadyGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;where&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField is null&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;select&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Column&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct&quot;&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:_&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;*&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// apply the udf to the fields that need editing&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// selecting out all the data that will be present in the final parquet file&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;transformedData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;where&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField is not null&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;select&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Column&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;
+        &lt;span class=&quot;nf&quot;&gt;clean&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;as&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;),&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct&quot;&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:_&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;*&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// union the two DataFrames&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;alreadyGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;union&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transformedData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// write out the final edited data&lt;/span&gt;
+    &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h4 id=&quot;case-4-i-need-to-edit-the-value-of-a-maptype&quot;&gt;Case 4: I need to edit the value of a MapType&lt;/h4&gt;
+
+&lt;p&gt;MapTypes follow the same pattern as simple types. You write a function that takes a Map of the correct key and value types and returns a Map of the same types.&lt;/p&gt;
+
+&lt;p&gt;In the following example, an entire entry in the Map[String,String] is removed from the final data by filtering on the keyset.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/MapTypeTransform.scala&quot;&gt;MapTypeTransform.scala&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&quot;language-scala highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;object&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;MapTypeTransform&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;transform&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SparkSession&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Unit&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;RawDataSchema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// cleanFunc will simply take the MapType and return an edited Map&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// in this example it removes one member of the map before returning&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;cleanFunc&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Map&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Map&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;])&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;m&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;m&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;filterKeys&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;k&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;k&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;editMe&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// register the func as a udf&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;clean&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;udf&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cleanFunc&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// required for the $ column syntax&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;spark.sqlContext.implicits._&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// if you have data that doesn't need editing, you can separate it out&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// The data will need to be in a form that can be unioned with the edited data&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// I do that here by selecting out all the fields.&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;alreadyGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;where&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap.editMe is null&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;select&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Column&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct&quot;&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:_&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;*&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// apply the udf to the fields that need editing&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// selecting out all the data that will be present in the final parquet file&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;transformedData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;where&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap.editMe is not null&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;select&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Column&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;nf&quot;&gt;clean&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;as&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;),&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct&quot;&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:_&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;*&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// union the two DataFrames&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;alreadyGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;union&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transformedData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// write out the final edited data&lt;/span&gt;
+    &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h4 id=&quot;case-5-i-need-to-change-the-value-of-a-member-of-a-structtype&quot;&gt;Case 5: I need to change the value of a member of a StructType&lt;/h4&gt;
+
+&lt;p&gt;Working with StructTypes requires an addition to the UDF registration statement. By supplying the schema of the StructType you are able to manipulate using a function that takes and returns a Row.&lt;/p&gt;
+
+&lt;p&gt;As Rows are immutable, a new Row must be created that has the same field order, type, and number as the schema. But, since the schema of the data is known, it’s relatively easy to reconstruct a new Row with the correct fields.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://github.com/dyanarose/parquet-edit-examples/blob/master/transform-examples/src/main/scala/com/dlr/transform/transformers/StructTypeTransform.scala&quot;&gt;StructTypeTransform.scala&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&quot;language-scala highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;object&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;StructTypeTransform&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;transform&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SparkSession&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Unit&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;spark&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;RawDataSchema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;schema&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sourcePath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// cleanFunc will take the struct as a Row and return a new Row with edited fields&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// note that the ordering and count of the fields must remain the same&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;cleanFunc&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Row&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Row&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;RowFactory&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;create&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;r&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;getAs&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;BooleanType&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// register the func as a udf&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// give the UDF a schema or the Row type won't be supported&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;clean&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;udf&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cleanFunc&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;StructType&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+        &lt;span class=&quot;nc&quot;&gt;StructField&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;BooleanType&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;
+          &lt;span class=&quot;nc&quot;&gt;StructField&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;editMe&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;StringType&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;
+          &lt;span class=&quot;nc&quot;&gt;Nil&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// required for the $ column syntax&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;spark.sqlContext.implicits._&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// if you have data that doesn't need editing, you can separate it out&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// The data will need to be in a form that can be unioned with the edited data&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// I do that here by selecting out all the fields.&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;alreadyGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;where&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct.editMe is null&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;select&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Column&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap&quot;&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:_&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;*&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// apply the udf to the fields that need editing&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// selecting out all the data that will be present in the final parquet file&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;transformedData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;originalData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;where&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct.editMe is not null&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;select&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Column&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myField&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;nf&quot;&gt;clean&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;as&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myStruct&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;),&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;myMap&quot;&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:_&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;*&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// union the two DataFrames&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;alreadyGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;union&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transformedData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// write out the final edited data&lt;/span&gt;
+    &lt;span class=&quot;nv&quot;&gt;allGoodData&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;py&quot;&gt;parquet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;destPath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;finally&quot;&gt;Finally&lt;/h3&gt;
+
+&lt;p&gt;Always test your transforms before you delete the original data!&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">You’ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?</summary></entry><entry><title type="html">Exploring Spark SQL DataTypes</title><link href="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/" rel="alternate" type="text/html" title="Exploring Spark SQL DataTypes" /><published>2016-04-09T12:57:06+01:00</published><updated>2016-04-09T12:57:06+01:00</updated><id>http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes</id><content type="html" xml:base="http://dyanarose.github.io/blog/2016/04/09/exploring-spark-sql-datatypes/">&lt;p&gt;I’ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I’m converting to parquet files. The data won’t all be processed at once and the schema will need to grow, so it’s imperative that the parquet files have schemas that are compatible.&lt;/p&gt;
+
+&lt;p&gt;The only one I really can’t get working yet is the CalendarIntervalType.&lt;/p&gt;
+
+&lt;p&gt;Looking at the Spark source files &lt;a href=&quot;https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/literals.scala&quot;&gt;literals.scala&lt;/a&gt; and &lt;a href=&quot;https://github.com/apache/spark/blob/master/common/unsafe/src/main/java/org/apache/spark/unsafe/types/CalendarInterval.java&quot;&gt;CalendarInterval.java&lt;/a&gt; I would assume that &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;CalendarInterval.fromString&lt;/code&gt; is called with the value, however I’m just getting nulls back when passing in a value like ‘interval 2 days’ which, when passed to &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;CalendarInterval.fromString&lt;/code&gt;, returns a non-null &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;CalendarInterval&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Source code for the tests is at: https://github.com/dyanarose/dlr-spark&lt;/p&gt;
+
+&lt;p&gt;Results:&lt;/p&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;-------------- DecimalType --------------
+------- DecimalType Input
+{'decimal': 1.2345}
+{'decimal': 1}
+{'decimal': 234.231}
+{'decimal': Infinity}
+{'decimal': -Infinity}
+{'decimal': NaN}
+{'decimal': '1'}
+{'decimal': '1.2345'}
+{'decimal': null}
+
+------- DecimalType Inferred Schema
+root
+ |-- decimal: string (nullable = true)
+
++-----------+
+|    decimal|
++-----------+
+|     1.2345|
+|          1|
+|    234.231|
+| &quot;Infinity&quot;|
+|&quot;-Infinity&quot;|
+|      &quot;NaN&quot;|
+|          1|
+|     1.2345|
+|       null|
++-----------+
+
+
+------- DecimalType Set Schema
+root
+ |-- decimal: decimal(6,3) (nullable = true)
+
++-------+
+|decimal|
++-------+
+|  1.235|
+|  1.000|
+|234.231|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
++-------+
+
+
+
+-------------- BooleanType --------------
+------- BooleanType Input
+{'boolean': true}
+{'boolean': false}
+{'boolean': 'false'}
+{'boolean': 'true'}
+{'boolean': null}
+{'boolean': 1}
+{'boolean': 0}
+{'boolean': '1'}
+{'boolean': '0'}
+{'boolean': 'a'}
+
+------- BooleanType Inferred Schema
+root
+ |-- boolean: string (nullable = true)
+
++-------+
+|boolean|
++-------+
+|   true|
+|  false|
+|  false|
+|   true|
+|   null|
+|      1|
+|      0|
+|      1|
+|      0|
+|      a|
++-------+
+
+
+------- BooleanType Set Schema
+root
+ |-- boolean: boolean (nullable = true)
+
++-------+
+|boolean|
++-------+
+|   true|
+|  false|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
+|   null|
++-------+
+
+
+
+-------------- ByteType --------------
+------- ByteType Input
+{'byte': 'a'}
+{'byte': 'b'}
+{'byte': 1}
+{'byte': 0}
+{'byte': 5}
+{'byte': null}
+
+------- ByteType Inferred Schema
+root
+ |-- byte: string (nullable = true)
+
++----+
+|byte|
++----+
+|   a|
+|   b|
+|   1|
+|   0|
+|   5|
+|null|
++----+
+
+
+------- ByteType Set Schema
+root
+ |-- byte: byte (nullable = true)
+
++----+
+|byte|
++----+
+|null|
+|null|
+|   1|
+|   0|
+|   5|
+|null|
++----+
+
+
+
+-------------- CalendarIntervalType --------------
+------- CalendarIntervalType Input
+{'calendarInterval': 'interval 2 days'}
+{'calendarInterval': 'interval 1 week'}
+{'calendarInterval': 'interval 5 years'}
+{'calendarInterval': 'interval 6 months'}
+{'calendarInterval': 10}
+{'calendarInterval': 'interval a'}
+{'calendarInterval': null}
+
+------- CalendarIntervalType Inferred Schema
+root
+ |-- calendarInterval: string (nullable = true)
+
++-----------------+
+| calendarInterval|
++-----------------+
+|  interval 2 days|
+|  interval 1 week|
+| interval 5 years|
+|interval 6 months|
+|               10|
+|       interval a|
+|             null|
++-----------------+
+
+
+------- CalendarIntervalType Set Schema
+root
+ |-- calendarInterval: calendarinterval (nullable = true)
+
++----------------+
+|calendarInterval|
++----------------+
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
+|            null|
++----------------+
+
+
+
+-------------- DateType --------------
+------- DateType Input
+{'date': '2016-04-24'}
+{'date': '0001-01-01'}
+{'date': '9999-12-31'}
+{'date': '2016-04-24 12:10:01'}
+{'date': 1461496201000}
+{'date': null}
+
+------- DateType Inferred Schema
+root
+ |-- date: string (nullable = true)
+
++-------------------+
+|               date|
++-------------------+
+|         2016-04-24|
+|         0001-01-01|
+|         9999-12-31|
+|2016-04-24 12:10:01|
+|      1461496201000|
+|               null|
++-------------------+
+
+
+------- DateType Set Schema
+root
+ |-- date: date (nullable = true)
+
++----------+
+|      date|
++----------+
+|2016-04-24|
+|0001-01-01|
+|9999-12-31|
+|2016-04-24|
+|      null|
+|      null|
++----------+
+
+
+
+-------------- DoubleType --------------
+------- DoubleType Input
+{'double': 1.23456}
+{'double': 1}
+{'double': 1.7976931348623157E308}
+{'double': -1.7976931348623157E308}
+{'double': Infinity}
+{'double': -Infinity}
+{'double': NaN}
+{'double': '1'}
+{'double': '1.23456'}
+{'double': null}
+
+------- DoubleType Inferred Schema
+root
+ |-- double: string (nullable = true)
+
++--------------------+
+|              double|
++--------------------+
+|             1.23456|
+|                   1|
+|1.797693134862315...|
+|-1.79769313486231...|
+|          &quot;Infinity&quot;|
+|         &quot;-Infinity&quot;|
+|               &quot;NaN&quot;|
+|                   1|
+|             1.23456|
+|                null|
++--------------------+
+
+
+------- DoubleType Set Schema
+root
+ |-- double: double (nullable = true)
+
++--------------------+
+|              double|
++--------------------+
+|             1.23456|
+|                 1.0|
+|1.797693134862315...|
+|-1.79769313486231...|
+|            Infinity|
+|           -Infinity|
+|                 NaN|
+|                null|
+|                null|
+|                null|
++--------------------+
+
+
+
+-------------- FloatType --------------
+------- FloatType Input
+{'float': 1.23456}
+{'float': 1}
+{'float': 3.4028235E38}
+{'float': -3.4028235E38}
+{'float': Infinity}
+{'float': -Infinity}
+{'float': NaN}
+{'float': '1'}
+{'float': '1.23456'}
+{'float': null}
+
+------- FloatType Inferred Schema
+root
+ |-- float: string (nullable = true)
+
++-------------+
+|        float|
++-------------+
+|      1.23456|
+|            1|
+| 3.4028235E38|
+|-3.4028235E38|
+|   &quot;Infinity&quot;|
+|  &quot;-Infinity&quot;|
+|        &quot;NaN&quot;|
+|            1|
+|      1.23456|
+|         null|
++-------------+
+
+
+------- FloatType Set Schema
+root
+ |-- float: float (nullable = true)
+
++-------------+
+|        float|
++-------------+
+|      1.23456|
+|          1.0|
+| 3.4028235E38|
+|-3.4028235E38|
+|     Infinity|
+|    -Infinity|
+|          NaN|
+|         null|
+|         null|
+|         null|
++-------------+
+
+
+
+-------------- IntegerType --------------
+------- IntegerType Input
+{'integer': 1}
+{'integer': 2147483647}
+{'integer': -2147483648}
+{'integer': 2147483648}
+{'integer': '1'}
+{'integer': 1.23456}
+{'integer': '1.23456'}
+{'integer': null}
+
+------- IntegerType Inferred Schema
+root
+ |-- integer: string (nullable = true)
+
++-----------+
+|    integer|
++-----------+
+|          1|
+| 2147483647|
+|-2147483648|
+| 2147483648|
+|          1|
+|    1.23456|
+|    1.23456|
+|       null|
++-----------+
+
+
+------- IntegerType Set Schema
+root
+ |-- integer: integer (nullable = true)
+
++-----------+
+|    integer|
++-----------+
+|          1|
+| 2147483647|
+|-2147483648|
+|       null|
+|       null|
+|       null|
+|       null|
+|       null|
++-----------+
+
+
+
+-------------- LongType --------------
+------- LongType Input
+{'long': 1}
+{'long': 9223372036854775807}
+{'long': -9223372036854775808}
+{'long': '1'}
+{'long': 1.23456}
+{'long': '1.23456'}
+{'long': null}
+
+------- LongType Inferred Schema
+root
+ |-- long: string (nullable = true)
+
++--------------------+
+|                long|
++--------------------+
+|                   1|
+| 9223372036854775807|
+|-9223372036854775808|
+|                   1|
+|             1.23456|
+|             1.23456|
+|                null|
++--------------------+
+
+
+------- LongType Set Schema
+root
+ |-- long: long (nullable = true)
+
++--------------------+
+|                long|
++--------------------+
+|                   1|
+| 9223372036854775807|
+|-9223372036854775808|
+|                null|
+|                null|
+|                null|
+|                null|
++--------------------+
+
+
+
+-------------- MapType --------------
+------- MapType Input
+{'map': {'a_key': 'a value', 'b_key': 'b value'}}
+{'map': {'key': 1, 'key1': null}}
+{'map': null}
+
+------- MapType Inferred Schema
+root
+ |-- map: struct (nullable = true)
+ |    |-- a_key: string (nullable = true)
+ |    |-- b_key: string (nullable = true)
+ |    |-- key: long (nullable = true)
+ |    |-- key1: string (nullable = true)
+
++--------------------+
+|                 map|
++--------------------+
+|[a value,b value,...|
+|  [null,null,1,null]|
+|                null|
++--------------------+
+
+
+------- MapType Set Schema
+root
+ |-- map: map (nullable = true)
+ |    |-- key: string
+ |    |-- value: string (valueContainsNull = true)
+
++--------------------+
+|                 map|
++--------------------+
+|Map(a_key -&amp;gt; a va...|
+|Map(key -&amp;gt; 1, key...|
+|                null|
++--------------------+
+
+
+
+-------------- NullType --------------
+------- NullType Input
+{'null': null}
+{'null': true}
+{'null': false}
+{'null': 1}
+{'null': 0}
+{'null': '1'}
+{'null': '0'}
+{'null': 'a'}
+
+------- NullType Inferred Schema
+root
+ |-- null: string (nullable = true)
+
++-----+
+| null|
++-----+
+| null|
+| true|
+|false|
+|    1|
+|    0|
+|    1|
+|    0|
+|    a|
++-----+
+
+
+------- NullType Set Schema
+root
+ |-- null: null (nullable = true)
+
++----+
+|null|
++----+
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
+|null|
++----+
+
+
+
+-------------- ShortType --------------
+------- ShortType Input
+{'short': 0}
+{'short': 1}
+{'short': 32767}
+{'short': -32768}
+{'short': 32768}
+{'short': 1.23456}
+{'short': '0'}
+{'short': '1'}
+{'short': '1.23456'}
+{'short': null}
+
+------- ShortType Inferred Schema
+root
+ |-- short: string (nullable = true)
+
++-------+
+|  short|
++-------+
+|      0|
+|      1|
+|  32767|
+| -32768|
+|  32768|
+|1.23456|
+|      0|
+|      1|
+|1.23456|
+|   null|
++-------+
+
+
+------- ShortType Set Schema
+root
+ |-- short: short (nullable = true)
+
++------+
+| short|
++------+
+|     0|
+|     1|
+| 32767|
+|-32768|
+|  null|
+|  null|
+|  null|
+|  null|
+|  null|
+|  null|
++------+
+
+
+
+-------------- TimestampType --------------
+------- TimestampType Input
+{'timestamp': '2016-04-24'}
+{'timestamp': '2016-04-24 12:10:01'}
+{'timestamp': 1461496201000}
+{'timestamp': '0001-01-01'}
+{'timestamp': '9999-12-31'}
+{'timestamp': null}
+
+------- TimestampType Inferred Schema
+root
+ |-- timestamp: string (nullable = true)
+
++-------------------+
+|          timestamp|
++-------------------+
+|         2016-04-24|
+|2016-04-24 12:10:01|
+|      1461496201000|
+|         0001-01-01|
+|         9999-12-31|
+|               null|
++-------------------+
+
+
+------- TimestampType Set Schema
+root
+ |-- timestamp: timestamp (nullable = true)
+
++--------------------+
+|           timestamp|
++--------------------+
+|2016-04-24 00:00:...|
+|2016-04-24 12:10:...|
+|2016-04-24 12:10:...|
+|0001-01-01 00:00:...|
+|9999-12-31 00:00:...|
+|                null|
++--------------------+
+
+
+
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">I’ve been exploring how different DataTypes in Spark SQL are imported from line delimited json to try to understand which DataTypes can be used for a semi-structured data set I’m converting to parquet files. The data won’t all be processed at once and the schema will need to grow, so it’s imperative that the parquet files have schemas that are compatible.</summary></entry><entry><title type="html">Preventing Duplication when Creating Relationships in Neo4j</title><link href="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/" rel="alternate" type="text/html" title="Preventing Duplication when Creating Relationships in Neo4j" /><published>2014-07-08T20:50:10+01:00</published><updated>2014-07-08T20:50:10+01:00</updated><id>http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j</id><content type="html" xml:base="http://dyanarose.github.io/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/">&lt;p&gt;Creating relationships between known nodes using Cypher in Neo4j is simple.&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;MATCH (p:Person), (e:Episode)
+CREATE (p) - [:INTERVIEWED_IN] -&amp;gt; (e)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;But what it you don’t know if one of the nodes exists? And further, what if you don’t know if the relationship itself already exists?&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;If the node doesn’t exist, I want it to be created.&lt;/li&gt;
+  &lt;li&gt;If the relationship doesn’t exist, I want it to be created.&lt;/li&gt;
+  &lt;li&gt;If both node and relationship exist, then nothing should be changed&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The simple scenario is of a set of Episode nodes and a set of Person nodes.
+    CREATE (e:Episode {title:”foo”, subtitle:”bar”})
+    return e
+    CREATE (p:Person {name:”Lynn Rose”})
+    return p&lt;/p&gt;
+
+&lt;p&gt;The Episode nodes are known to exist. The Person nodes may or may not exist.&lt;/p&gt;
+
+&lt;p&gt;My first attempts at getting this right in my working database were tragic failures.
+For example, the following, while working as intended in a new 2.0.1 database, fails and causes duplicate person nodes in my working database. (Adding a unique constraint on person.name causes the statement to throw an exception rather than create a duplicate)
+    MATCH (e:Episode {title: “foo”})
+    CREATE UNIQUE (e) &amp;lt;- [:INTERVIEWED_IN] - (p:Person {name:”Lynn Rose”})&lt;/p&gt;
+
+&lt;p&gt;As I said, the duplication doesn’t happen in a clean 2.0.1 database, so the problem must be with my working database.&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;The database was originally created on Neo4j 1.9.3 and is now running under Neo4j 2.0.1&lt;/li&gt;
+  &lt;li&gt;The nodes created before the release of 2.x use the old style indexes.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;But those facts aside, I still need to stop the duplication! So back to the &lt;a href=&quot;http://docs.neo4j.org/chunked/stable/cypher-query-lang.html&quot;&gt;Cypher documentation&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;The Cypher documents for &lt;a href=&quot;http://docs.neo4j.org/chunked/stable/query-create-unique.html&quot;&gt;CREATE UNIQUE&lt;/a&gt;  specify the following in a call out box:&lt;/p&gt;
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;http://docs.neo4j.org/chunked/stable/query-merge.html&quot;&gt;MERGE&lt;/a&gt; might be what you want to use instead of CREATE UNIQUE&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;It’s MERGE that gives the ability to control what happens when a node is, or isn’t, matched. It does this through the syntax of ON MATCH and ON CREATE.&lt;/p&gt;
+
+&lt;p&gt;Using MERGE and ON CREATE I can get a handle on an existing person node to be able to use in our relationship creation, thus preventing duplication of person nodes.&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;MATCH (e:Episode {title: &quot;foo&quot;})
+MERGE (p:Person {name: &quot;Lynn Rose&quot;})
+ON CREATE SET p.firstname = &quot;Lynn&quot;, p.surname = &quot;Rose&quot;
+MERGE (e) &amp;lt;- [:INTERVIEWED_IN] - (p)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;But, we’ve still got an issue here. This doesn’t necessarily solve the problem of duplicating relationships.&lt;/p&gt;
+
+&lt;p&gt;In that call out box in the CREATE UNIQUE documentation, it goes on to say:&lt;/p&gt;
+&lt;blockquote&gt;
+  &lt;p&gt;Note however, that MERGE doesn’t give as strong guarantees for relationships being unique.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;So I take from this that I should use MERGE to prevent node duplication, but CREATE UNIQUE should be used to prevent relationship duplication.&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;MATCH (e:Episode {title: &quot;foo&quot;})
+MERGE (p:Person {name: &quot;Lynn Rose&quot;})
+ON CREATE SET p.firstname = &quot;Lynn&quot;, p.surname = &quot;Rose&quot;
+CREATE UNIQUE (e) &amp;lt;- [:INTERVIEWED_IN] - (p)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;And here we are.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;If the node doesn’t exist, it is created using MERGE ON CREATE.&lt;/li&gt;
+  &lt;li&gt;If the relationship doesn’t exist, it is created using CREATE UNIQUE.&lt;/li&gt;
+  &lt;li&gt;If both node and relationship exist, then nothing is changed.&lt;/li&gt;
+&lt;/ul&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><category term="neo4j" /><category term="cypher" /><summary type="html">Creating relationships between known nodes using Cypher in Neo4j is simple.</summary></entry></feed>

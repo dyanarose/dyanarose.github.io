@@ -1,373 +1,175 @@
-
 <!DOCTYPE html>
-<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
-<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
-<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
-<head>
+<html lang="en"><head>
   <meta charset="utf-8">
-  <title>Graceful Shutdown of Java Apps Under Docker - These Things Happen</title>
-  <meta name="author" content="Dyana Rose">
-
-  
-  <meta name="description" content="tl;dr application-interrupts I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its &hellip;">
-  
-
-  <!-- http://t.co/dKP3o1e -->
-  <meta name="HandheldFriendly" content="True">
-  <meta name="MobileOptimized" content="320">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  
-  <link rel="canonical" href="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker">
-  <link href="/favicon.png" rel="icon">
-  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
-  <link href="/atom.xml" rel="alternate" title="These Things Happen" type="application/atom+xml">
-  <script src="/javascripts/modernizr-2.0.js"></script>
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
-  <script src="/javascripts/octopress.js" type="text/javascript"></script>
-  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
-<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
-<link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
-<link href='http://fonts.googleapis.com/css?family=Fjalla+One' rel='stylesheet' type='text/css'>
-
-  
-
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>graceful shutdown of java apps under docker | These Things Happen</title>
+<meta name="generator" content="Jekyll v3.9.2" />
+<meta property="og:title" content="graceful shutdown of java apps under docker" />
+<meta name="author" content="Dyana Rose" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="tl;dr application-interrupts" />
+<meta property="og:description" content="tl;dr application-interrupts" />
+<link rel="canonical" href="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" />
+<meta property="og:url" content="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" />
+<meta property="og:site_name" content="These Things Happen" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2017-08-26T13:39:00+01:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="graceful shutdown of java apps under docker" />
+<script type="application/ld+json">
+{"description":"tl;dr application-interrupts","author":{"@type":"Person","name":"Dyana Rose"},"@type":"BlogPosting","url":"http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/","headline":"graceful shutdown of java apps under docker","dateModified":"2017-08-26T13:39:00+01:00","datePublished":"2017-08-26T13:39:00+01:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/css/style.css"><link type="application/atom+xml" rel="alternate" href="http://dyanarose.github.io/feed.xml" title="These Things Happen" />
 </head>
+<body><header class="site-header">
 
-<body   >
-  <header role="banner"><hgroup>
-  <h1><a href="/">These Things Happen</a></h1>
-  
-    <h2>fixing bugs and chewing bubblegum</h2>
-  
-</hgroup>
+  <div class="wrapper"><h1><a class="site-title" rel="author" href="/">These Things Happen</a></h1>
+      
+        <h2>fixing bugs and chewing bubblegum</h2>
+      
+  </div><nav class="site-nav">
+      <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+      <label for="nav-trigger">
+        <span class="menu-icon">
+          <svg viewBox="0 0 18 15" width="18px" height="15px">
+            <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+          </svg>
+        </span>
+      </label>
 
-</header>
-  <nav role="navigation"><ul class="subscription" data-subscription="rss">
-  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
-  
-</ul>
-  
-<form action="https://www.google.com/search" method="get">
-  <fieldset role="search">
-    <input type="hidden" name="q" value="site:dyanarose.github.io" />
-    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
-  </fieldset>
-</form>
-  
-<ul class="main-navigation">
-  <li><a href="/">Blog</a></li>
-  <li><a href="/blog/archives">Archives</a></li>
-    <li><a href="/dateformats">Date/time Cheat Sheet</a></li>
-</ul>
+      <div class="trigger"><a class="page-link" href="/blog/archives/">Archives</a><a class="page-link" href="/dateformats/">Date/time Cheat Sheet</a></div>
+    </nav></header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
 
-</nav>
-  <div id="main">
-    <div id="content">
-      <div>
-<article class="hentry" role="article">
-  
-  <header>
-    
-      <h1 class="entry-title">Graceful Shutdown of Java Apps Under Docker</h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2017-08-26T13:39:00+01:00" pubdate data-updated="true">Aug 26<sup>th</sup>, 2017</time>
-        
-      </p>
-    
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">graceful shutdown of java apps under docker</h1>
+    <p class="post-meta"><time class="dt-published" datetime="2017-08-26T13:39:00+01:00" itemprop="datePublished">
+        Aug 26, 2017
+      </time></p>
   </header>
 
-
-<div class="entry-content"><p>tl;dr <a href="https://github.com/dyanarose/application-interrupts">application-interrupts</a></p>
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>tl;dr <a href="https://github.com/dyanarose/application-interrupts">application-interrupts</a></p>
 
 <p>I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.</p>
 
 <p>This app has a main loop that receives messages off an AWS SQS queue, processes those messages, takes action if required (making a put request to a third party), and then deletes the messages off the queue.</p>
 
-<p>Each action must only ever send a unique record to the api. Because the third party doesn&rsquo;t expose any unique identifier for a record, though it does provide an endpoint to get a list of all existing records, the application itself must handle the idea of uniqueness.</p>
+<p>Each action must only ever send a unique record to the api. Because the third party doesn’t expose any unique identifier for a record, though it does provide an endpoint to get a list of all existing records, the application itself must handle the idea of uniqueness.</p>
 
 <p>So, in the case of a double whammy of my app being shut down after taking action, but before deleting the message from the queue, and the third party being slow to update the list of previous requests, I could end up sending duplicate records when the new app starts up.</p>
 
-<h2>No problem, we&rsquo;ve got SIGTERM</h2>
+<h2 id="no-problem-weve-got-sigterm">No problem, we’ve got SIGTERM</h2>
+<p>When <code class="language-plaintext highlighter-rouge">docker stop</code> is called on a container, SIGTERM is sent to PID 1, and in Java a <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/lang/hook-design.html">shutdown hook</a> is used to catch the SIGTERM and clean up any resources before finally stopping.</p>
 
-<p>When <code>docker stop</code> is called on a container, SIGTERM is sent to PID 1, and in Java a <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/lang/hook-design.html">shutdown hook</a> is used to catch the SIGTERM and clean up any resources before finally stopping.</p>
-
-<p>In this case though, it&rsquo;s not resources that need cleaning up. This is a continuously running application that needs to finish any work currently in process before returning out of the main loop and stopping.</p>
+<p>In this case though, it’s not resources that need cleaning up. This is a continuously running application that needs to finish any work currently in process before returning out of the main loop and stopping.</p>
 
 <p>As it happens, Java has a good way of letting a Thread know that the application would like it to shut down before it starts its next itteration of work.</p>
 
-<h2>Interrupts</h2>
-
-<p>A Thread in Java has an <code>interrupted</code> method which returns true if the Thread has been interrupted since the last time <code>Thread.interrupted()</code> was called.
+<h2 id="interrupts">Interrupts</h2>
+<p>A Thread in Java has an <code class="language-plaintext highlighter-rouge">interrupted</code> method which returns true if the Thread has been interrupted since the last time <code class="language-plaintext highlighter-rouge">Thread.interrupted()</code> was called.
 (more on <a href="https://docs.oracle.com/javase/tutorial/essential/concurrency/interrupt.html">Interrupts</a>)</p>
 
-<h3>Why are interrupts useful</h3>
+<h3 id="why-are-interrupts-useful">Why are interrupts useful</h3>
 
-<p>In the main loop a condition of <code>while(!Thread.interrupted())</code> will allow the while block to run to completion, but also prevent the next execution if an interrupt occured during the previous run, which is exactly what needs to happen to allow messages to complete processing before the app shuts down.</p>
+<p>In the main loop a condition of <code class="language-plaintext highlighter-rouge">while(!Thread.interrupted())</code> will allow the while block to run to completion, but also prevent the next execution if an interrupt occured during the previous run, which is exactly what needs to happen to allow messages to complete processing before the app shuts down.</p>
 
-<h4>How to interrupt a thread</h4>
+<h4 id="how-to-interrupt-a-thread">How to interrupt a thread</h4>
 
-<p>The short answer is &lsquo;by invoking <code>Thread.interrupt</code>&rsquo; in the shutdown hook.</p>
+<p>The short answer is ‘by invoking <code class="language-plaintext highlighter-rouge">Thread.interrupt</code>’ in the shutdown hook.</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">threadInterruptedOnShutdown</span><span class="o">(</span><span class="kt">long</span> <span class="n">timeout</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="c1">// Setting interrupt doesn&#39;t cause the application to wait for the thread to exit.</span>
-</span><span class='line'>    <span class="c1">// The statements inside the interrupt block in the loop may or may not be executed.</span>
-</span><span class='line'>    <span class="n">String</span> <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;threadInterruptedOnShutdown wait &quot;</span> <span class="o">+</span> <span class="n">timeout</span><span class="o">;</span>
-</span><span class='line'>    <span class="n">Thread</span> <span class="n">t</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Thread</span><span class="o">(</span><span class="k">new</span> <span class="n">RunnableLoop</span><span class="o">(</span><span class="n">name</span><span class="o">,</span> <span class="n">timeout</span><span class="o">));</span>
-</span><span class='line'>    <span class="n">t</span><span class="o">.</span><span class="na">start</span><span class="o">();</span>
-</span><span class='line'>    <span class="n">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: setting interrupt&quot;</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="na">interrupt</span><span class="o">();</span>
-</span><span class='line'>        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: shutting down&quot;</span><span class="o">);</span>
-</span><span class='line'>    <span class="o">}));</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">threadInterruptedOnShutdown</span><span class="o">(</span><span class="kt">long</span> <span class="n">timeout</span><span class="o">)</span> <span class="o">{</span>
+    <span class="c1">// Setting interrupt doesn't cause the application to wait for the thread to exit.</span>
+    <span class="c1">// The statements inside the interrupt block in the loop may or may not be executed.</span>
+    <span class="nc">String</span> <span class="n">name</span> <span class="o">=</span> <span class="s">"threadInterruptedOnShutdown wait "</span> <span class="o">+</span> <span class="n">timeout</span><span class="o">;</span>
+    <span class="nc">Thread</span> <span class="n">t</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Thread</span><span class="o">(</span><span class="k">new</span> <span class="nc">RunnableLoop</span><span class="o">(</span><span class="n">name</span><span class="o">,</span> <span class="n">timeout</span><span class="o">));</span>
+    <span class="n">t</span><span class="o">.</span><span class="na">start</span><span class="o">();</span>
+    <span class="nc">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="nc">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">" thread: setting interrupt"</span><span class="o">);</span>
+        <span class="n">t</span><span class="o">.</span><span class="na">interrupt</span><span class="o">();</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">" thread: shutting down"</span><span class="o">);</span>
+    <span class="o">}));</span>
+<span class="o">}</span>
+</code></pre></div></div>
 
-
-<p>Just calling interrupt on a Thread doesn&rsquo;t give the control needed to ensure the current work is completed. It doesn&rsquo;t necessarily wait on the Thread to exit before letting the application shut down. There&rsquo;s no reason you couldn&rsquo;t write the code to handle this of course, but the <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ExecutorService.html">ExecutorService</a> already provides that for us.</p>
+<p>Just calling interrupt on a Thread doesn’t give the control needed to ensure the current work is completed. It doesn’t necessarily wait on the Thread to exit before letting the application shut down. There’s no reason you couldn’t write the code to handle this of course, but the <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ExecutorService.html">ExecutorService</a> already provides that for us.</p>
 
 <p>When submitting a Runnable (or Callable) to the ExecutorService, a handle for a Future is returned. Working together, the Future and the ExecutorService give control over interrupting Threads, waiting for them to exit, and if anything fails to exit, providing an opportunity to do any damage control.</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">futureFromExecutorService</span><span class="o">(</span><span class="kt">long</span> <span class="n">timeout</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="c1">// the executor service submit method allows us to get a handle on the thread</span>
-</span><span class='line'>    <span class="c1">// via a future and set the interrupt in the shutdown hook</span>
-</span><span class='line'>    <span class="n">String</span> <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;futureFromExecutorService wait &quot;</span> <span class="o">+</span> <span class="n">timeout</span><span class="o">;</span>
-</span><span class='line'>    <span class="n">ExecutorService</span> <span class="n">service</span> <span class="o">=</span> <span class="n">Executors</span><span class="o">.</span><span class="na">newSingleThreadExecutor</span><span class="o">();</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="n">Future</span><span class="o">&lt;?&gt;</span> <span class="n">app</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="na">submit</span><span class="o">(</span><span class="k">new</span> <span class="n">RunnableLoop</span><span class="o">(</span><span class="n">name</span><span class="o">,</span> <span class="n">timeout</span><span class="o">));</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="n">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="n">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: setting interrupt&quot;</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">app</span><span class="o">.</span><span class="na">cancel</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">service</span><span class="o">.</span><span class="na">shutdown</span><span class="o">();</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="k">try</span> <span class="o">{</span>
-</span><span class='line'>            <span class="c1">// give the thread time to shutdown. This needs to be comfortably less than the</span>
-</span><span class='line'>            <span class="c1">// time the docker stop command will wait for a container to terminate on its own</span>
-</span><span class='line'>            <span class="c1">// before forcibly killing it.</span>
-</span><span class='line'>            <span class="k">if</span> <span class="o">(!</span><span class="n">service</span><span class="o">.</span><span class="na">awaitTermination</span><span class="o">(</span><span class="mi">7</span><span class="o">,</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">))</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: did not shutdown in time, forcing service shutdown&quot;</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">service</span><span class="o">.</span><span class="na">shutdownNow</span><span class="o">();</span>
-</span><span class='line'>            <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: shutdown cleanly&quot;</span><span class="o">);</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">InterruptedException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>            <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; thread: shutdown timer interrupted, forcing service shutdown&quot;</span><span class="o">);</span>
-</span><span class='line'>            <span class="n">service</span><span class="o">.</span><span class="na">shutdownNow</span><span class="o">();</span>
-</span><span class='line'>        <span class="o">}</span>
-</span><span class='line'>    <span class="o">}));</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">futureFromExecutorService</span><span class="o">(</span><span class="kt">long</span> <span class="n">timeout</span><span class="o">)</span> <span class="o">{</span>
+    <span class="c1">// the executor service submit method allows us to get a handle on the thread</span>
+    <span class="c1">// via a future and set the interrupt in the shutdown hook</span>
+    <span class="nc">String</span> <span class="n">name</span> <span class="o">=</span> <span class="s">"futureFromExecutorService wait "</span> <span class="o">+</span> <span class="n">timeout</span><span class="o">;</span>
+    <span class="nc">ExecutorService</span> <span class="n">service</span> <span class="o">=</span> <span class="nc">Executors</span><span class="o">.</span><span class="na">newSingleThreadExecutor</span><span class="o">();</span>
 
+    <span class="nc">Future</span><span class="o">&lt;?&gt;</span> <span class="n">app</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="na">submit</span><span class="o">(</span><span class="k">new</span> <span class="nc">RunnableLoop</span><span class="o">(</span><span class="n">name</span><span class="o">,</span> <span class="n">timeout</span><span class="o">));</span>
 
-<p>To interrupt the Thread when SIGTERM is received, inside the shutdown hook call <code>.cancel(true)</code> on the Future. The boolean parameter allows the cancel method to interrupt a running Thread. Without that parameter, the Thread will not be interrupted.</p>
+    <span class="nc">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="nc">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">" thread: setting interrupt"</span><span class="o">);</span>
+        <span class="n">app</span><span class="o">.</span><span class="na">cancel</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+        <span class="n">service</span><span class="o">.</span><span class="na">shutdown</span><span class="o">();</span>
 
-<p>Once the Future is cancelled, the service can begin shutting down. The ExecutorService has two types of shutdown. <code>.shutdown()</code> will stop any more work from being submitted to the service while allowing existing work to execute. <code>.shutdownNow()</code> on the other hand actively attempts to stop all running tasks.</p>
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="c1">// give the thread time to shutdown. This needs to be comfortably less than the</span>
+            <span class="c1">// time the docker stop command will wait for a container to terminate on its own</span>
+            <span class="c1">// before forcibly killing it.</span>
+            <span class="k">if</span> <span class="o">(!</span><span class="n">service</span><span class="o">.</span><span class="na">awaitTermination</span><span class="o">(</span><span class="mi">7</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">))</span> <span class="o">{</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">" thread: did not shutdown in time, forcing service shutdown"</span><span class="o">);</span>
+                <span class="n">service</span><span class="o">.</span><span class="na">shutdownNow</span><span class="o">();</span>
+            <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">" thread: shutdown cleanly"</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">InterruptedException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">" thread: shutdown timer interrupted, forcing service shutdown"</span><span class="o">);</span>
+            <span class="n">service</span><span class="o">.</span><span class="na">shutdownNow</span><span class="o">();</span>
+        <span class="o">}</span>
+    <span class="o">}));</span>
+<span class="o">}</span>
+</code></pre></div></div>
+<p>To interrupt the Thread when SIGTERM is received, inside the shutdown hook call <code class="language-plaintext highlighter-rouge">.cancel(true)</code> on the Future. The boolean parameter allows the cancel method to interrupt a running Thread. Without that parameter, the Thread will not be interrupted.</p>
 
-<p>After calling <code>.shutdown()</code> use the ExecutorService&rsquo;s <code>.awaitTermination</code> method to both give the Threads time to finish any current work and also to handle those that do not return in time. Set the timout argument to be less than that of the <code>docker stop</code> command so that there will be time to do damage control and attempt a final <code>.shutdownNow()</code> before docker kills the container for being non-responsive.</p>
+<p>Once the Future is cancelled, the service can begin shutting down. The ExecutorService has two types of shutdown. <code class="language-plaintext highlighter-rouge">.shutdown()</code> will stop any more work from being submitted to the service while allowing existing work to execute. <code class="language-plaintext highlighter-rouge">.shutdownNow()</code> on the other hand actively attempts to stop all running tasks.</p>
+
+<p>After calling <code class="language-plaintext highlighter-rouge">.shutdown()</code> use the ExecutorService’s <code class="language-plaintext highlighter-rouge">.awaitTermination</code> method to both give the Threads time to finish any current work and also to handle those that do not return in time. Set the timout argument to be less than that of the <code class="language-plaintext highlighter-rouge">docker stop</code> command so that there will be time to do damage control and attempt a final <code class="language-plaintext highlighter-rouge">.shutdownNow()</code> before docker kills the container for being non-responsive.</p>
 
 <p>All together, this allows a continously running application to respond to shutdown requests in a timely manner and also complete the work that is currently in process.</p>
-</div>
 
-
-  <footer>
-    <p class="meta">
-      
-  
-
-<span class="byline author vcard">Posted by <span class="fn">Dyana Rose</span></span>
-
-      
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2017-08-26T13:39:00+01:00" pubdate data-updated="true">Aug 26<sup>th</sup>, 2017</time>
-      
-
-
-    </p>
-    
-      <div class="sharing">
-  
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" data-via="dyanarose" data-counturl="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" >Tweet</a>
-  
-  
-  
-</div>
-
-    
-    <p class="meta">
-      
-        <a class="basic-alignment left" href="/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/" title="Previous Post: so you need to edit a parquet file">&laquo; so you need to edit a parquet file</a>
-      
-      
-        <a class="basic-alignment right" href="/blog/2017/11/05/building-and-showing/" title="Next Post: Building and Showing">Building and Showing &raquo;</a>
-      
-    </p>
-  </footer>
+  </div><a class="u-url" href="/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" hidden></a>
 </article>
 
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col">
+        <p class="feed-subscribe">
+          <a href="/feed.xml">
+            <svg class="svg-icon orange">
+              <use xlink:href="/assets/minima-social-icons.svg#rss"></use>
+            </svg><span>Subscribe</span>
+          </a>
+        </p>
+        <ul class="contact-list">
+          
+        </ul>
+      </div>
+      <div class="footer-col">
+        <p></p>
+      </div>
+    </div>
+
+    <div class="social-links"><ul class="social-media-list"><li><a rel="me" href="https://github.com/dyanarose" target="_blank" title="dyanarose"><svg class="svg-icon grey"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg></a></li><li><a rel="me" href="https://twitter.com/dyanarose" target="_blank" title="dyanarose"><svg class="svg-icon grey"><use xlink:href="/assets/minima-social-icons.svg#twitter"></use></svg></a></li></ul>
 </div>
 
-<aside class="sidebar">
-  
-    <section>
-  <h1>Recent Posts</h1>
-  <ul id="recent_posts">
-    
-      <li class="post">
-        <a href="/blog/2017/11/05/building-and-showing/">Building and Showing</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/">Graceful Shutdown of Java Apps Under Docker</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/">So You Need to Edit a Parquet File</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2016/04/09/exploring-spark-sql-datatypes/">Exploring Spark SQL DataTypes</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2014/07/08/preventing-duplication-when-creating-relationships-in-neo4j/">Preventing Duplication When Creating Relationships in Neo4j</a>
-      </li>
-    
-  </ul>
-</section>
-
-<section>
-  <h1>GitHub Repos</h1>
-  <ul id="gh_repos">
-    <li class="loading">Status updating...</li>
-  </ul>
-  
-  <a href="https://github.com/dyanarose">@dyanarose</a> on GitHub
-  
-  <script type="text/javascript">
-    $(document).ready(function(){
-        if (!window.jXHR){
-            var jxhr = document.createElement('script');
-            jxhr.type = 'text/javascript';
-            jxhr.src = '/javascripts/libs/jXHR.js';
-            var s = document.getElementsByTagName('script')[0];
-            s.parentNode.insertBefore(jxhr, s);
-        }
-
-        github.showRepos({
-            user: 'dyanarose',
-            count: 0,
-            skip_forks: true,
-            target: '#gh_repos'
-        });
-    });
-  </script>
-  <script src="/javascripts/github.js" type="text/javascript"> </script>
-</section>
-
-
-
-
-
-  
-</aside>
-
-
-    </div>
   </div>
-  <footer role="contentinfo"><p>
-  Copyright &copy; 2017 - Dyana Rose -
-  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
-</p>
 
 </footer>
-  
-
-
-
-
-
-
-
-  <script type="text/javascript">
-    (function(){
-      var twitterWidgets = document.createElement('script');
-      twitterWidgets.type = 'text/javascript';
-      twitterWidgets.async = true;
-      twitterWidgets.src = '//platform.twitter.com/widgets.js';
-      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
-    })();
-  </script>
-
-
-
-
-
 </body>
+
 </html>

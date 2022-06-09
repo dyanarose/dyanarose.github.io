@@ -1,4 +1,1 @@
-User-agent: *
-Disallow: 
-
-Sitemap: http://dyanarose.github.io/sitemap.xml 
+Sitemap: http://dyanarose.github.io/sitemap.xml
