@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>Upserting in Postges | These Things Happen</title>
+<meta name="generator" content="Jekyll v3.9.2" />
+<meta property="og:title" content="Upserting in Postges" />
+<meta name="author" content="Dyana Rose" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction." />
+<meta property="og:description" content="Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction." />
+<link rel="canonical" href="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/" />
+<meta property="og:url" content="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/" />
+<meta property="og:site_name" content="These Things Happen" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-06-01T12:11:11+01:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Upserting in Postges" />
+<script type="application/ld+json">
+{"description":"Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.","author":{"@type":"Person","name":"Dyana Rose"},"@type":"BlogPosting","url":"http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/","headline":"Upserting in Postges","dateModified":"2022-06-01T12:11:11+01:00","datePublished":"2022-06-01T12:11:11+01:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/css/style.css"><link type="application/atom+xml" rel="alternate" href="http://dyanarose.github.io/feed.xml" title="These Things Happen" /><!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-KWL38RC');</script>
+    <!-- End Google Tag Manager -->
+</head>
+<body><!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KWL38RC"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) --><header class="site-header">
+
+  <div class="wrapper"><h1><a class="site-title" rel="author" href="/">These Things Happen</a></h1>
+      
+        <h2>fixing bugs and chewing bubblegum</h2>
+      
+  </div><nav class="site-nav">
+      <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+      <label for="nav-trigger">
+        <span class="menu-icon">
+          <svg viewBox="0 0 18 15" width="18px" height="15px">
+            <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+          </svg>
+        </span>
+      </label>
+
+      <div class="trigger"><a class="page-link" href="/blog/archives/">Archives</a><a class="page-link" href="/dateformats/">Date/time Cheat Sheet</a></div>
+    </nav></header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Upserting in Postges</h1>
+    <p class="post-meta"><time class="dt-published" datetime="2022-06-01T12:11:11+01:00" itemprop="datePublished">
+        Jun 1, 2022
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.</p>
+
+<p>Upserting let’s you pick and choose the individual row values that you want to update. It’s not just an “all or nothing” approach to updating the row.</p>
+
+<p>Let’s explore upserting into a table tracking a location’s high temperatures per day.</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">temp_agg</span>
+<span class="p">(</span>
+    <span class="n">id</span> <span class="nb">integer</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="k">day</span> <span class="nb">date</span><span class="p">,</span>
+    <span class="n">high</span> <span class="nb">NUMERIC</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+    <span class="k">CONSTRAINT</span> <span class="n">id_day</span> <span class="k">UNIQUE</span> <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
+<span class="p">)</span>
+</code></pre></div></div>
+<p>Every hour our application polls for the temperature at a set of location endpoints and inserts the current temperature. If a location endpoint is down, unresponsive, or returning “bad” data, it will be skipped and re-polled in the next hourly run.</p>
+
+<p>Our first attempt at writing the temperature INSERT statement starts out like:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">temp_agg</span> 
+<span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="k">day</span><span class="p">,</span> <span class="n">high</span><span class="p">)</span>
+<span class="k">VALUES</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">),</span> <span class="mi">15</span><span class="p">.</span><span class="mi">00</span><span class="p">),</span>
+<span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">),</span> <span class="mi">15</span><span class="p">.</span><span class="mi">50</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>This runs and the table now looks like:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>id</th>
+      <th>high</th>
+      <th>day</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>15.00</td>
+      <td>2022-06-01</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>15.50</td>
+      <td>2022-06-01</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="on-conflict">On Conflict…</h2>
+<p>But the next time the application tries to insert data for <code class="language-plaintext highlighter-rouge">2022-06-01</code> the INSERT statement returns the error <code class="language-plaintext highlighter-rouge">duplicate key value violates unique constraint "id_day"</code> because inserting the data would conflict with the constraint that each row have a unique (id, day) pair.</p>
+
+<p>The <a href="https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT">ON CONFLICT</a> clause acts a bit like a row based “catch” of a “try… catch…” statement. You declare what conflict you are interested in dealing with and how you want to deal with it at the row level.</p>
+
+<p>There are two options for using ON CONFLICT</p>
+
+<h3 id="on-conflict-do-nothing">ON CONFLICT DO NOTHING</h3>
+<p><code class="language-plaintext highlighter-rouge">ON CONFLICT ... DO NOTHING</code> inserts each row that doesn’t have a conflict and skips each row that does.</p>
+
+<p>The following SQL has conflicts on ids 1 and 2 on the day ‘2022-06-01’. It <em>ignores</em> those two rows and inserts the row with id 3.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">temp_agg</span> 
+<span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
+<span class="k">VALUES</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">20</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">)),</span>
+<span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">)),</span>
+<span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">21</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">))</span>
+<span class="k">ON</span> <span class="n">CONFLICT</span> <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
+<span class="k">DO</span> <span class="k">NOTHING</span>
+</code></pre></div></div>
+<p>Result:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>id</th>
+      <th>high</th>
+      <th>day</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>15.00</td>
+      <td>2022-06-01</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>15.50</td>
+      <td>2022-06-01</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>21.00</td>
+      <td>2022-06-01</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="on-conflict-do-update">ON CONFLICT DO UPDATE</h3>
+<p><code class="language-plaintext highlighter-rouge">ON CONFLICT ... DO UPDATE</code> inserts each row that doesn’t have a conflict and <em>updates</em> each row that does.</p>
+
+<p>In the update statement you have access to both the existing row data and the new row data that caused the conflict. You reference them like so:</p>
+
+<p>Existing data =&gt; <code class="language-plaintext highlighter-rouge">&lt;table_name&gt;.&lt;field&gt;</code> ie <code class="language-plaintext highlighter-rouge">temp_agg.high</code></p>
+
+<p>If you have aliased the table ie <code class="language-plaintext highlighter-rouge">INSERT INTO temp_agg as t</code> then you will refernce the existing data as <code class="language-plaintext highlighter-rouge">t.high</code></p>
+
+<p>New data =&gt; <code class="language-plaintext highlighter-rouge">EXCLUDED.&lt;field&gt;</code> ie <code class="language-plaintext highlighter-rouge">EXCLUDED.high</code></p>
+
+<p>If your insert statement already references a table named <code class="language-plaintext highlighter-rouge">excluded</code> you should alias it to avoid any naming conflicts.</p>
+
+<p>The following SQL statements achieve the same result using different semantics:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">temp_agg</span> 
+<span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
+<span class="k">VALUES</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">20</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">)),</span>
+<span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">)),</span>
+<span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">18</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">))</span>
+<span class="k">ON</span> <span class="n">CONFLICT</span> <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
+<span class="k">DO</span> <span class="k">UPDATE</span> <span class="k">SET</span> <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">temp_agg</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">EXCLUDED</span><span class="p">.</span><span class="n">high</span><span class="p">,</span> <span class="n">temp_agg</span><span class="p">.</span><span class="k">day</span><span class="p">)</span> 
+<span class="k">WHERE</span> <span class="n">EXCLUDED</span><span class="p">.</span><span class="n">high</span> <span class="o">&gt;</span> <span class="n">temp_agg</span><span class="p">.</span><span class="n">high</span>
+</code></pre></div></div>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">temp_agg</span> 
+<span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
+<span class="k">VALUES</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">20</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">)),</span>
+<span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">)),</span>
+<span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">18</span><span class="p">.</span><span class="mi">00</span><span class="p">,</span> <span class="nb">DATE</span><span class="p">(</span><span class="s1">'2022-06-01'</span><span class="p">))</span>
+<span class="k">ON</span> <span class="n">CONFLICT</span> <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
+<span class="k">DO</span> <span class="k">UPDATE</span> <span class="k">SET</span> <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">temp_agg</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">GREATEST</span><span class="p">(</span><span class="n">EXCLUDED</span><span class="p">.</span><span class="n">high</span><span class="p">,</span> <span class="n">temp_agg</span><span class="p">.</span><span class="n">high</span><span class="p">),</span> <span class="n">temp_agg</span><span class="p">.</span><span class="k">day</span><span class="p">)</span> 
+</code></pre></div></div>
+
+<p>The result is that the high temperature for locations 1 &amp; 2 on day <code class="language-plaintext highlighter-rouge">2022-06-01</code> have been updated and the high temp for location 3 has stayed the same.</p>
+
+<p>Result:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>id</th>
+      <th>high</th>
+      <th>day</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>20.00</td>
+      <td>2022-06-01</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>20.00</td>
+      <td>2022-06-01</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>21.00</td>
+      <td>2022-06-01</td>
+    </tr>
+  </tbody>
+</table>
+
+  </div><a class="u-url" href="/blog/2022/06/01/upserting-in-postgres/" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col">
+        <p class="feed-subscribe">
+          <a href="/feed.xml">
+            <svg class="svg-icon orange">
+              <use xlink:href="/assets/minima-social-icons.svg#rss"></use>
+            </svg><span>Subscribe</span>
+          </a>
+        </p>
+        <ul class="contact-list">
+          
+        </ul>
+      </div>
+      <div class="footer-col">
+        <p></p>
+      </div>
+    </div>
+
+    <div class="social-links"><ul class="social-media-list"><li><a rel="me" href="https://github.com/dyanarose" target="_blank" title="dyanarose"><svg class="svg-icon grey"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg></a></li><li><a rel="me" href="https://twitter.com/dyanarose" target="_blank" title="dyanarose"><svg class="svg-icon grey"><use xlink:href="/assets/minima-social-icons.svg#twitter"></use></svg></a></li></ul>
+</div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

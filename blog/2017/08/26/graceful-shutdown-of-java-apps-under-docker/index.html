@@ -8,8 +8,8 @@
 <meta property="og:title" content="graceful shutdown of java apps under docker" />
 <meta name="author" content="Dyana Rose" />
 <meta property="og:locale" content="en_US" />
-<meta name="description" content="tl;dr application-interrupts" />
-<meta property="og:description" content="tl;dr application-interrupts" />
+<meta name="description" content="I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal." />
+<meta property="og:description" content="I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal." />
 <link rel="canonical" href="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" />
 <meta property="og:url" content="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" />
 <meta property="og:site_name" content="These Things Happen" />
@@ -18,7 +18,7 @@
 <meta name="twitter:card" content="summary" />
 <meta property="twitter:title" content="graceful shutdown of java apps under docker" />
 <script type="application/ld+json">
-{"description":"tl;dr application-interrupts","author":{"@type":"Person","name":"Dyana Rose"},"@type":"BlogPosting","url":"http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/","headline":"graceful shutdown of java apps under docker","dateModified":"2017-08-26T13:39:00+01:00","datePublished":"2017-08-26T13:39:00+01:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/"},"@context":"https://schema.org"}</script>
+{"description":"I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.","author":{"@type":"Person","name":"Dyana Rose"},"@type":"BlogPosting","url":"http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/","headline":"graceful shutdown of java apps under docker","dateModified":"2017-08-26T13:39:00+01:00","datePublished":"2017-08-26T13:39:00+01:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/"},"@context":"https://schema.org"}</script>
 <!-- End Jekyll SEO tag -->
 <link rel="stylesheet" href="/assets/css/style.css"><link type="application/atom+xml" rel="alternate" href="http://dyanarose.github.io/feed.xml" title="These Things Happen" /><!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -61,9 +61,7 @@
   </header>
 
   <div class="post-content e-content" itemprop="articleBody">
-    <p>tl;dr <a href="https://github.com/dyanarose/application-interrupts">application-interrupts</a></p>
-
-<p>I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.</p>
+    <p>I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.</p>
 
 <p>This app has a main loop that receives messages off an AWS SQS queue, processes those messages, takes action if required (making a put request to a third party), and then deletes the messages off the queue.</p>
 
@@ -145,6 +143,8 @@
 <p>After calling <code class="language-plaintext highlighter-rouge">.shutdown()</code> use the ExecutorService’s <code class="language-plaintext highlighter-rouge">.awaitTermination</code> method to both give the Threads time to finish any current work and also to handle those that do not return in time. Set the timout argument to be less than that of the <code class="language-plaintext highlighter-rouge">docker stop</code> command so that there will be time to do damage control and attempt a final <code class="language-plaintext highlighter-rouge">.shutdownNow()</code> before docker kills the container for being non-responsive.</p>
 
 <p>All together, this allows a continously running application to respond to shutdown requests in a timely manner and also complete the work that is currently in process.</p>
+
+<p>tl;dr <a href="https://github.com/dyanarose/application-interrupts">application-interrupts</a></p>
 
   </div><a class="u-url" href="/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" hidden></a>
 </article>

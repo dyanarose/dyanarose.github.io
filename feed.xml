@@ -1,4 +1,164 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="http://dyanarose.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="http://dyanarose.github.io/" rel="alternate" type="text/html" /><updated>2022-06-10T17:22:54+01:00</updated><id>http://dyanarose.github.io/feed.xml</id><title type="html">These Things Happen</title><author><name>Dyana Rose</name></author><entry><title type="html">Building and Showing</title><link href="http://dyanarose.github.io/blog/2017/11/05/building-and-showing/" rel="alternate" type="text/html" title="Building and Showing" /><published>2017-11-05T10:57:57+00:00</published><updated>2017-11-05T10:57:57+00:00</updated><id>http://dyanarose.github.io/blog/2017/11/05/building-and-showing</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/11/05/building-and-showing/">&lt;p&gt;On and off I’ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I’ve never publicly linked to it.&lt;/p&gt;
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="http://dyanarose.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="http://dyanarose.github.io/" rel="alternate" type="text/html" /><updated>2022-06-18T10:34:19+01:00</updated><id>http://dyanarose.github.io/feed.xml</id><title type="html">These Things Happen</title><author><name>Dyana Rose</name></author><entry><title type="html">Upserting in Postges</title><link href="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/" rel="alternate" type="text/html" title="Upserting in Postges" /><published>2022-06-01T12:11:11+01:00</published><updated>2022-06-01T12:11:11+01:00</updated><id>http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres</id><content type="html" xml:base="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/">&lt;p&gt;Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.&lt;/p&gt;
+
+&lt;p&gt;Upserting let’s you pick and choose the individual row values that you want to update. It’s not just an “all or nothing” approach to updating the row.&lt;/p&gt;
+
+&lt;p&gt;Let’s explore upserting into a table tracking a location’s high temperatures per day.&lt;/p&gt;
+&lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;CREATE&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;TABLE&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;IF&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;NOT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;EXISTS&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;id&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;integer&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;NOT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;date&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NUMERIC&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;5&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;CONSTRAINT&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;id_day&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;UNIQUE&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;Every hour our application polls for the temperature at a set of location endpoints and inserts the current temperature. If a location endpoint is down, unresponsive, or returning “bad” data, it will be skipped and re-polled in the next hourly run.&lt;/p&gt;
+
+&lt;p&gt;Our first attempt at writing the temperature INSERT statement starts out like:&lt;/p&gt;
+&lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;INSERT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;INTO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt; 
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;VALUES&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;15&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;15&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;50&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;This runs and the table now looks like:&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;id&lt;/th&gt;
+      &lt;th&gt;high&lt;/th&gt;
+      &lt;th&gt;day&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;15.00&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;2&lt;/td&gt;
+      &lt;td&gt;15.50&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h2 id=&quot;on-conflict&quot;&gt;On Conflict…&lt;/h2&gt;
+&lt;p&gt;But the next time the application tries to insert data for &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;2022-06-01&lt;/code&gt; the INSERT statement returns the error &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;duplicate key value violates unique constraint &quot;id_day&quot;&lt;/code&gt; because inserting the data would conflict with the constraint that each row have a unique (id, day) pair.&lt;/p&gt;
+
+&lt;p&gt;The &lt;a href=&quot;https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT&quot;&gt;ON CONFLICT&lt;/a&gt; clause acts a bit like a row based “catch” of a “try… catch…” statement. You declare what conflict you are interested in dealing with and how you want to deal with it at the row level.&lt;/p&gt;
+
+&lt;p&gt;There are two options for using ON CONFLICT&lt;/p&gt;
+
+&lt;h3 id=&quot;on-conflict-do-nothing&quot;&gt;ON CONFLICT DO NOTHING&lt;/h3&gt;
+&lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ON CONFLICT ... DO NOTHING&lt;/code&gt; inserts each row that doesn’t have a conflict and skips each row that does.&lt;/p&gt;
+
+&lt;p&gt;The following SQL has conflicts on ids 1 and 2 on the day ‘2022-06-01’. It &lt;em&gt;ignores&lt;/em&gt; those two rows and inserts the row with id 3.&lt;/p&gt;
+
+&lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;INSERT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;INTO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt; 
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;VALUES&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;20&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)),&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;20&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)),&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;21&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;ON&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CONFLICT&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;DO&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;NOTHING&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;Result:&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;id&lt;/th&gt;
+      &lt;th&gt;high&lt;/th&gt;
+      &lt;th&gt;day&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;15.00&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;2&lt;/td&gt;
+      &lt;td&gt;15.50&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;3&lt;/td&gt;
+      &lt;td&gt;21.00&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h3 id=&quot;on-conflict-do-update&quot;&gt;ON CONFLICT DO UPDATE&lt;/h3&gt;
+&lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ON CONFLICT ... DO UPDATE&lt;/code&gt; inserts each row that doesn’t have a conflict and &lt;em&gt;updates&lt;/em&gt; each row that does.&lt;/p&gt;
+
+&lt;p&gt;In the update statement you have access to both the existing row data and the new row data that caused the conflict. You reference them like so:&lt;/p&gt;
+
+&lt;p&gt;Existing data =&amp;gt; &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;&amp;lt;table_name&amp;gt;.&amp;lt;field&amp;gt;&lt;/code&gt; ie &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;temp_agg.high&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;If you have aliased the table ie &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;INSERT INTO temp_agg as t&lt;/code&gt; then you will refernce the existing data as &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;t.high&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;New data =&amp;gt; &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;EXCLUDED.&amp;lt;field&amp;gt;&lt;/code&gt; ie &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;EXCLUDED.high&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;If your insert statement already references a table named &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;excluded&lt;/code&gt; you should alias it to avoid any naming conflicts.&lt;/p&gt;
+
+&lt;p&gt;The following SQL statements achieve the same result using different semantics:&lt;/p&gt;
+&lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;INSERT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;INTO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt; 
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;VALUES&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;20&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)),&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;20&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)),&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;18&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;ON&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CONFLICT&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;DO&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;UPDATE&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;SET&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EXCLUDED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; 
+&lt;span class=&quot;k&quot;&gt;WHERE&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EXCLUDED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;INSERT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;INTO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt; 
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;VALUES&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;20&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)),&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;20&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)),&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;18&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'2022-06-01'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;ON&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CONFLICT&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;DO&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;UPDATE&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;SET&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;GREATEST&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;EXCLUDED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; 
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The result is that the high temperature for locations 1 &amp;amp; 2 on day &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;2022-06-01&lt;/code&gt; have been updated and the high temp for location 3 has stayed the same.&lt;/p&gt;
+
+&lt;p&gt;Result:&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;id&lt;/th&gt;
+      &lt;th&gt;high&lt;/th&gt;
+      &lt;th&gt;day&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;20.00&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;2&lt;/td&gt;
+      &lt;td&gt;20.00&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;3&lt;/td&gt;
+      &lt;td&gt;21.00&lt;/td&gt;
+      &lt;td&gt;2022-06-01&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.</summary></entry><entry><title type="html">Building and Showing</title><link href="http://dyanarose.github.io/blog/2017/11/05/building-and-showing/" rel="alternate" type="text/html" title="Building and Showing" /><published>2017-11-05T10:57:57+00:00</published><updated>2017-11-05T10:57:57+00:00</updated><id>http://dyanarose.github.io/blog/2017/11/05/building-and-showing</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/11/05/building-and-showing/">&lt;p&gt;On and off I’ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I’ve never publicly linked to it.&lt;/p&gt;
 
 &lt;p&gt;Part of the reason is that it’s not a finished product and I’m not a web designer. But why should that stop me, eh? It’s already been an interesting product involving:&lt;/p&gt;
 
@@ -29,9 +189,7 @@
 
 &lt;p&gt;http://www.gw2roar.com&lt;/p&gt;
 
-&lt;p&gt;I’m going to continue to talk more about the choices I made, and continue to make, and why I had to make them with this project. For example, the significant work around keeping both cache and database sizes sane, automating the ETL process, automating deployments, and anything that comes next.&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">On and off I’ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I’ve never publicly linked to it.</summary></entry><entry><title type="html">graceful shutdown of java apps under docker</title><link href="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" rel="alternate" type="text/html" title="graceful shutdown of java apps under docker" /><published>2017-08-26T13:39:00+01:00</published><updated>2017-08-26T13:39:00+01:00</updated><id>http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/">&lt;p&gt;tl;dr &lt;a href=&quot;https://github.com/dyanarose/application-interrupts&quot;&gt;application-interrupts&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.&lt;/p&gt;
+&lt;p&gt;I’m going to continue to talk more about the choices I made, and continue to make, and why I had to make them with this project. For example, the significant work around keeping both cache and database sizes sane, automating the ETL process, automating deployments, and anything that comes next.&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">On and off I’ve been working on a site that displays candlestick charts using data from the Guild Wars 2 trading post, but I’ve never publicly linked to it.</summary></entry><entry><title type="html">graceful shutdown of java apps under docker</title><link href="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/" rel="alternate" type="text/html" title="graceful shutdown of java apps under docker" /><published>2017-08-26T13:39:00+01:00</published><updated>2017-08-26T13:39:00+01:00</updated><id>http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/08/26/graceful-shutdown-of-java-apps-under-docker/">&lt;p&gt;I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.&lt;/p&gt;
 
 &lt;p&gt;This app has a main loop that receives messages off an AWS SQS queue, processes those messages, takes action if required (making a put request to a third party), and then deletes the messages off the queue.&lt;/p&gt;
 
@@ -112,7 +270,9 @@
 
 &lt;p&gt;After calling &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.shutdown()&lt;/code&gt; use the ExecutorService’s &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.awaitTermination&lt;/code&gt; method to both give the Threads time to finish any current work and also to handle those that do not return in time. Set the timout argument to be less than that of the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;docker stop&lt;/code&gt; command so that there will be time to do damage control and attempt a final &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.shutdownNow()&lt;/code&gt; before docker kills the container for being non-responsive.&lt;/p&gt;
 
-&lt;p&gt;All together, this allows a continously running application to respond to shutdown requests in a timely manner and also complete the work that is currently in process.&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">tl;dr application-interrupts</summary></entry><entry><title type="html">so you need to edit a parquet file</title><link href="http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/" rel="alternate" type="text/html" title="so you need to edit a parquet file" /><published>2017-08-04T11:40:32+01:00</published><updated>2017-08-04T11:40:32+01:00</updated><id>http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/">&lt;p&gt;You’ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?&lt;/p&gt;
+&lt;p&gt;All together, this allows a continously running application to respond to shutdown requests in a timely manner and also complete the work that is currently in process.&lt;/p&gt;
+
+&lt;p&gt;tl;dr &lt;a href=&quot;https://github.com/dyanarose/application-interrupts&quot;&gt;application-interrupts&lt;/a&gt;&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">I ran across a problem recently when working on a Java application that needed to be allowed to finish processing its current batch before shutting down after the receipt of a shut down signal.</summary></entry><entry><title type="html">so you need to edit a parquet file</title><link href="http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/" rel="alternate" type="text/html" title="so you need to edit a parquet file" /><published>2017-08-04T11:40:32+01:00</published><updated>2017-08-04T11:40:32+01:00</updated><id>http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file</id><content type="html" xml:base="http://dyanarose.github.io/blog/2017/08/04/so-you-need-to-edit-a-parquet-file/">&lt;p&gt;You’ve uncovered a problem in your beautiful parquet files, some piece of data either snuck in, or was calculated incorrectly, or there was just a bug. You know exactly how to correct the data, but how do you update the files?&lt;/p&gt;
 
 &lt;p&gt;tl;dr: &lt;a href=&quot;https://github.com/dyanarose/parquet-edit-examples&quot;&gt;spark-edit-examples&lt;/a&gt;&lt;/p&gt;
 
@@ -969,7 +1129,7 @@ root
 CREATE (p) - [:INTERVIEWED_IN] -&amp;gt; (e)
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;p&gt;But what it you don’t know if one of the nodes exists? And further, what if you don’t know if the relationship itself already exists?&lt;/p&gt;
+&lt;p&gt;But what if you don’t know if one of the nodes exists? And further, what if you don’t know if the relationship itself already exists?&lt;/p&gt;
 
 &lt;ul&gt;
   &lt;li&gt;If the node doesn’t exist, I want it to be created.&lt;/li&gt;
