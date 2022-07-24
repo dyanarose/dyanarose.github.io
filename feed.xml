@@ -1,4 +1,62 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="http://dyanarose.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="http://dyanarose.github.io/" rel="alternate" type="text/html" /><updated>2022-06-18T10:46:02+01:00</updated><id>http://dyanarose.github.io/feed.xml</id><title type="html">These Things Happen</title><author><name>Dyana Rose</name></author><entry><title type="html">Upserting in Postges: It’s not just all or nothing</title><link href="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/" rel="alternate" type="text/html" title="Upserting in Postges: It’s not just all or nothing" /><published>2022-06-01T12:11:11+01:00</published><updated>2022-06-01T12:11:11+01:00</updated><id>http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres</id><content type="html" xml:base="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/">&lt;p&gt;Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.&lt;/p&gt;
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="http://dyanarose.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="http://dyanarose.github.io/" rel="alternate" type="text/html" /><updated>2022-07-24T12:54:39+01:00</updated><id>http://dyanarose.github.io/feed.xml</id><title type="html">These Things Happen</title><author><name>Dyana Rose</name></author><entry><title type="html">Reducing Costs by Switching to Cheaper AWS Services</title><link href="http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services/" rel="alternate" type="text/html" title="Reducing Costs by Switching to Cheaper AWS Services" /><published>2022-06-08T12:11:11+01:00</published><updated>2022-06-08T12:11:11+01:00</updated><id>http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services</id><content type="html" xml:base="http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services/">&lt;p&gt;I run a tiny website for tracking item prices in Guild Wars 2, &lt;a href=&quot;http://www.gw2roar.com/&quot;&gt;gw2roar.com&lt;/a&gt;. I don’t run it for the money (it has 1 or 2 visitors per day), it’s simply a fun site that suits my needs.&lt;/p&gt;
+
+&lt;p&gt;Because it doesn’t make money, every penny of running cost comes out of my pocket. When I first started the site, it was all 12 month free tier AWS services so I didn’t care about cost and then I took part in an Alexa promotion that gave me a $100 credit against my monthly bill. All good things come to an end as they say. After I got notification that the promotion was ending, I started looking at how I could significantly reduce my costs.&lt;/p&gt;
+
+&lt;h2 id=&quot;step-1-use-the-cost-explorer-to-find-the-high-cost-services&quot;&gt;Step 1: Use the Cost Explorer to find the high cost services&lt;/h2&gt;
+&lt;p&gt;Open up &lt;a href=&quot;console.aws.amazon.com/cost-management/home&quot;&gt;Cost Management&lt;/a&gt; and click on the Cost Explorer in the list on the left.&lt;/p&gt;
+
+&lt;p&gt;In this view you can explore the costs of each service you use.&lt;/p&gt;
+
+&lt;p&gt;I had two spikes in my cost explorer, Elasticache and RDS. Elasticache stores candlestick data per item per day for quick retrieval. RDS runs a postgres instance that stores the item price data retrieved every 30 minutes from the Guild Wars 2 API.&lt;/p&gt;
+
+&lt;h2 id=&quot;step-2-imagine-your-site-without-the-high-cost-service&quot;&gt;Step 2: Imagine your site without the high cost service&lt;/h2&gt;
+&lt;p&gt;What if Elasticache didn’t exist?&lt;/p&gt;
+
+&lt;p&gt;Calculating candlestick data on the fly is slow and the result never changes after a day is done and I used Elasticache to speed up loading times.&lt;/p&gt;
+
+&lt;p&gt;Ultimately I needed a quick, distributed cache I could query by item id and time. Elasticache isn’t the only service that provides that, I could move to nearly any distributed cache. My decision ultimately came down to cost.&lt;/p&gt;
+
+&lt;h2 id=&quot;step-3-cost-up-the-changes&quot;&gt;Step 3: Cost up the changes&lt;/h2&gt;
+&lt;p&gt;The AWS pricing calculator has gotten much easier to use over the past few years. Now that you can easily price by service there’s less room for missing out or adding in costs by mistake.&lt;/p&gt;
+
+&lt;p&gt;A 1 node, t2.micro &lt;a href=&quot;https://calculator.aws/#/addService/ElastiCache&quot;&gt;ElastiCache cluster costs about $12.41 per month&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;What would the price be if I switched to, say, DynamoDB?&lt;/p&gt;
+
+&lt;p&gt;DynamoDB is a bit more difficult to price, you need to know:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;the size of your data&lt;/li&gt;
+  &lt;li&gt;the baseline read/write rates&lt;/li&gt;
+  &lt;li&gt;the peak read/write rates&lt;/li&gt;
+  &lt;li&gt;how long the peaks last&lt;/li&gt;
+  &lt;li&gt;what different options and features mean&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;I used the information from ElastiCache to estimate the size of the data and the web statistics to estimate the read capacity. The write capacity was harder to estimate because it came from two sources.&lt;/p&gt;
+
+&lt;p&gt;A visitor could cause a write by loading the data for an item, but that would be at a much frequency lower than the number of users on the site. So the baseline write rate is very low.&lt;/p&gt;
+
+&lt;p&gt;At the end of every month a batch job calculates and loads all the data for the month into the cache. Given I knew how many items there were, and that the data needed to be loaded within 15 minutes (the timeout of a Lambda function), I could work out what the peak write rate would be.&lt;/p&gt;
+
+&lt;p&gt;Did I need:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://aws.amazon.com/blogs/aws/dynamodb-price-reduction-and-new-reserved-capacity-model/&quot;&gt;reserved capacity&lt;/a&gt;? no, that would drive up the cost and provide no benefit at a low rate of reads/writes&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://aws.amazon.com/dynamodb/pricing/on-demand/&quot;&gt;on-demand capacity&lt;/a&gt;? It’s nice in theory to pay for what you use, but in practice it would be more expensive for my site than using &lt;a href=&quot;https://aws.amazon.com/dynamodb/pricing/provisioned/&quot;&gt;provisioned capacity&lt;/a&gt; and auto-scaling.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;With everything in the calculator, AWS predicted a cost of about $3.20 per month. However, the calculator doesn’t take into account the &lt;a href=&quot;https://aws.amazon.com/free/?all-free-tier.sort-by=item.additionalFields.SortRank&amp;amp;all-free-tier.sort-order=asc&amp;amp;awsf.Free%20Tier%20Types=tier%23always-free&amp;amp;awsf.Free%20Tier%20Categories=categories%23databases&quot;&gt;“always free” alowances&lt;/a&gt;, so switching to DynamoDB would actually bring my costs to 0.&lt;/p&gt;
+
+&lt;h2 id=&quot;step-4-make-the-changes-and-evaluate&quot;&gt;Step 4: Make the changes and evaluate&lt;/h2&gt;
+&lt;p&gt;The cost estimation is just an estimation. The real world can be different.&lt;/p&gt;
+
+&lt;p&gt;For example, with my first implementation of the switch to DynamoDB, I put some of the code into the same Lamdba function that called RDS. That function was running in the RDS VPC, and it’s quite simple to set up a VPC endpoint for DynamoDB. So easy that I missed that this would cost me &lt;a href=&quot;https://aws.amazon.com/privatelink/pricing/&quot;&gt;$0.01 per AZ per hour&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Thankfully I saw the costs within the first few hours of creating the endpoint and was able to re-architect my functions.&lt;/p&gt;
+
+&lt;p&gt;Watching and evaluating the costs is essential to finding out fast if your estimates were wrong.&lt;/p&gt;
+
+&lt;h2 id=&quot;step-5-repeat-from-step-1&quot;&gt;Step 5: Repeat from Step 1&lt;/h2&gt;
+&lt;p&gt;Keep hunting for options and reducing costs until you’re satisfied.&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">I run a tiny website for tracking item prices in Guild Wars 2, gw2roar.com. I don’t run it for the money (it has 1 or 2 visitors per day), it’s simply a fun site that suits my needs.</summary></entry><entry><title type="html">Upserting in Postges: It’s not just all or nothing</title><link href="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/" rel="alternate" type="text/html" title="Upserting in Postges: It’s not just all or nothing" /><published>2022-06-01T12:11:11+01:00</published><updated>2022-06-01T12:11:11+01:00</updated><id>http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres</id><content type="html" xml:base="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/">&lt;p&gt;Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.&lt;/p&gt;
 
 &lt;p&gt;Upserting let’s you pick and choose the individual row values that you want to update. It’s not just an “all or nothing” approach to updating the row.&lt;/p&gt;
 
