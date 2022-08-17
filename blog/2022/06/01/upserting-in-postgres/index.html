@@ -63,7 +63,7 @@
   <div class="post-content e-content" itemprop="articleBody">
     <p>Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.</p>
 
-<p>Upserting let’s you pick and choose the individual row values that you want to update. It’s not just an “all or nothing” approach to updating the row.</p>
+<p>If you want to only update particular fields, and not all fields in the row, you can do that to.</p>
 
 <p>Let’s explore upserting into a table tracking a location’s high temperatures per day.</p>
 <div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">temp_agg</span>
@@ -76,7 +76,7 @@
 </code></pre></div></div>
 <p>Every hour our application polls for the temperature at a set of location endpoints and inserts the current temperature. If a location endpoint is down, unresponsive, or returning “bad” data, it will be skipped and re-polled in the next hourly run.</p>
 
-<p>Our first attempt at writing the temperature INSERT statement starts out like:</p>
+<p>Our first attempt at writing the temperature <code class="language-plaintext highlighter-rouge">INSERT</code> statement starts out like:</p>
 <div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">temp_agg</span> 
 <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="k">day</span><span class="p">,</span> <span class="n">high</span><span class="p">)</span>
 <span class="k">VALUES</span>
@@ -108,12 +108,12 @@
   </tbody>
 </table>
 
-<h2 id="on-conflict">On Conflict…</h2>
 <p>But the next time the application tries to insert data for <code class="language-plaintext highlighter-rouge">2022-06-01</code> the INSERT statement returns the error <code class="language-plaintext highlighter-rouge">duplicate key value violates unique constraint "id_day"</code> because inserting the data would conflict with the constraint that each row have a unique (id, day) pair.</p>
 
-<p>The <a href="https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT">ON CONFLICT</a> clause acts a bit like a row based “catch” of a “try… catch…” statement. You declare what conflict you are interested in dealing with and how you want to deal with it at the row level.</p>
+<h2 id="on-conflict">On Conflict…</h2>
+<p>The <a href="https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT">ON CONFLICT</a> clause acts a bit like a row based “catch” of a “try catch…” statement. <code class="language-plaintext highlighter-rouge">try</code> to insert the row, <code class="language-plaintext highlighter-rouge">catch and handle any conflict</code>. In the  <code class="language-plaintext highlighter-rouge">ON CONFLICT</code> clause you declare what conflict you are interested in and how you want to deal with it at the row level.</p>
 
-<p>There are two options for using ON CONFLICT</p>
+<p>There are two options for using ON CONFLICT, <code class="language-plaintext highlighter-rouge">DO NOTHING</code> and <code class="language-plaintext highlighter-rouge">DO UPDATE</code></p>
 
 <h3 id="on-conflict-do-nothing">ON CONFLICT DO NOTHING</h3>
 <p><code class="language-plaintext highlighter-rouge">ON CONFLICT ... DO NOTHING</code> inserts each row that doesn’t have a conflict and skips each row that does.</p>
@@ -161,17 +161,21 @@
 <h3 id="on-conflict-do-update">ON CONFLICT DO UPDATE</h3>
 <p><code class="language-plaintext highlighter-rouge">ON CONFLICT ... DO UPDATE</code> inserts each row that doesn’t have a conflict and <em>updates</em> each row that does.</p>
 
-<p>In the update statement you have access to both the existing row data and the new row data that caused the conflict. You reference them like so:</p>
+<p>In the <code class="language-plaintext highlighter-rouge">DO UPDATE</code> statement you have access to both the existing row data and the new row data, though referencing them is not quite obvious. You reference them like so:</p>
 
 <p>Existing data =&gt; <code class="language-plaintext highlighter-rouge">&lt;table_name&gt;.&lt;field&gt;</code> ie <code class="language-plaintext highlighter-rouge">temp_agg.high</code></p>
 
-<p>If you have aliased the table ie <code class="language-plaintext highlighter-rouge">INSERT INTO temp_agg as t</code> then you will refernce the existing data as <code class="language-plaintext highlighter-rouge">t.high</code></p>
+<p>If you have aliased the table, for example <code class="language-plaintext highlighter-rouge">INSERT INTO temp_agg as t</code>, then you will reference the existing data as <code class="language-plaintext highlighter-rouge">t.high</code></p>
 
 <p>New data =&gt; <code class="language-plaintext highlighter-rouge">EXCLUDED.&lt;field&gt;</code> ie <code class="language-plaintext highlighter-rouge">EXCLUDED.high</code></p>
 
-<p>If your insert statement already references a table named <code class="language-plaintext highlighter-rouge">excluded</code> you should alias it to avoid any naming conflicts.</p>
+<p>If your insert statement already references a table named <code class="language-plaintext highlighter-rouge">excluded</code> you need to alias it to avoid any naming conflicts.</p>
 
-<p>The following SQL statements achieve the same result using different semantics:</p>
+<p>The result we’re looking for is to update the high temperature for locations 1 &amp; 2 on day <code class="language-plaintext highlighter-rouge">2022-06-01</code> but location 3 is unchanged.</p>
+
+<p>The following SQL statements achieve this using different semantics</p>
+
+<p>In the first example, the conflict rows are only updated if the new (<code class="language-plaintext highlighter-rouge">EXCLUDED</code>) high temperature is greater than the existing high temperature.</p>
 <div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">temp_agg</span> 
 <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
 <span class="k">VALUES</span>
@@ -182,6 +186,9 @@
 <span class="k">DO</span> <span class="k">UPDATE</span> <span class="k">SET</span> <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">temp_agg</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">EXCLUDED</span><span class="p">.</span><span class="n">high</span><span class="p">,</span> <span class="n">temp_agg</span><span class="p">.</span><span class="k">day</span><span class="p">)</span> 
 <span class="k">WHERE</span> <span class="n">EXCLUDED</span><span class="p">.</span><span class="n">high</span> <span class="o">&gt;</span> <span class="n">temp_agg</span><span class="p">.</span><span class="n">high</span>
 </code></pre></div></div>
+
+<p>In the second example the <code class="language-plaintext highlighter-rouge">GREATEST</code> function is used to set the high temperature instead of filtering with a <code class="language-plaintext highlighter-rouge">WHERE</code> clause.</p>
+
 <div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">temp_agg</span> 
 <span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="k">day</span><span class="p">)</span>
 <span class="k">VALUES</span>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="http://dyanarose.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="http://dyanarose.github.io/" rel="alternate" type="text/html" /><updated>2022-07-24T12:54:39+01:00</updated><id>http://dyanarose.github.io/feed.xml</id><title type="html">These Things Happen</title><author><name>Dyana Rose</name></author><entry><title type="html">Reducing Costs by Switching to Cheaper AWS Services</title><link href="http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services/" rel="alternate" type="text/html" title="Reducing Costs by Switching to Cheaper AWS Services" /><published>2022-06-08T12:11:11+01:00</published><updated>2022-06-08T12:11:11+01:00</updated><id>http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services</id><content type="html" xml:base="http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services/">&lt;p&gt;I run a tiny website for tracking item prices in Guild Wars 2, &lt;a href=&quot;http://www.gw2roar.com/&quot;&gt;gw2roar.com&lt;/a&gt;. I don’t run it for the money (it has 1 or 2 visitors per day), it’s simply a fun site that suits my needs.&lt;/p&gt;
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="http://dyanarose.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="http://dyanarose.github.io/" rel="alternate" type="text/html" /><updated>2022-08-17T21:23:52+01:00</updated><id>http://dyanarose.github.io/feed.xml</id><title type="html">These Things Happen</title><author><name>Dyana Rose</name></author><entry><title type="html">Reducing Costs by Switching to Cheaper AWS Services</title><link href="http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services/" rel="alternate" type="text/html" title="Reducing Costs by Switching to Cheaper AWS Services" /><published>2022-06-08T12:11:11+01:00</published><updated>2022-06-08T12:11:11+01:00</updated><id>http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services</id><content type="html" xml:base="http://dyanarose.github.io/blog/2022/06/08/reducing-costs-by-switching-to-cheaper-aws-services/">&lt;p&gt;I run a tiny website for tracking item prices in Guild Wars 2, &lt;a href=&quot;http://www.gw2roar.com/&quot;&gt;gw2roar.com&lt;/a&gt;. I don’t run it for the money (it has 1 or 2 visitors per day), it’s simply a fun site that suits my needs.&lt;/p&gt;
 
 &lt;p&gt;Because it doesn’t make money, every penny of running cost comes out of my pocket. When I first started the site, it was all 12 month free tier AWS services so I didn’t care about cost and then I took part in an Alexa promotion that gave me a $100 credit against my monthly bill. All good things come to an end as they say. After I got notification that the promotion was ending, I started looking at how I could significantly reduce my costs.&lt;/p&gt;
 
@@ -58,7 +58,7 @@
 &lt;h2 id=&quot;step-5-repeat-from-step-1&quot;&gt;Step 5: Repeat from Step 1&lt;/h2&gt;
 &lt;p&gt;Keep hunting for options and reducing costs until you’re satisfied.&lt;/p&gt;</content><author><name>Dyana Rose</name></author><category term="blog" /><summary type="html">I run a tiny website for tracking item prices in Guild Wars 2, gw2roar.com. I don’t run it for the money (it has 1 or 2 visitors per day), it’s simply a fun site that suits my needs.</summary></entry><entry><title type="html">Upserting in Postges: It’s not just all or nothing</title><link href="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/" rel="alternate" type="text/html" title="Upserting in Postges: It’s not just all or nothing" /><published>2022-06-01T12:11:11+01:00</published><updated>2022-06-01T12:11:11+01:00</updated><id>http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres</id><content type="html" xml:base="http://dyanarose.github.io/blog/2022/06/01/upserting-in-postgres/">&lt;p&gt;Upserting in Postgres lets you insert a new value or update an existing value in a single atomic statement. This avoids needing two separate statements, read and update/insert, wrapped in a transaction.&lt;/p&gt;
 
-&lt;p&gt;Upserting let’s you pick and choose the individual row values that you want to update. It’s not just an “all or nothing” approach to updating the row.&lt;/p&gt;
+&lt;p&gt;If you want to only update particular fields, and not all fields in the row, you can do that to.&lt;/p&gt;
 
 &lt;p&gt;Let’s explore upserting into a table tracking a location’s high temperatures per day.&lt;/p&gt;
 &lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;CREATE&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;TABLE&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;IF&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;NOT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;EXISTS&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;
@@ -71,7 +71,7 @@
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 &lt;p&gt;Every hour our application polls for the temperature at a set of location endpoints and inserts the current temperature. If a location endpoint is down, unresponsive, or returning “bad” data, it will be skipped and re-polled in the next hourly run.&lt;/p&gt;
 
-&lt;p&gt;Our first attempt at writing the temperature INSERT statement starts out like:&lt;/p&gt;
+&lt;p&gt;Our first attempt at writing the temperature &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;INSERT&lt;/code&gt; statement starts out like:&lt;/p&gt;
 &lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;INSERT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;INTO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt; 
 &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
 &lt;span class=&quot;k&quot;&gt;VALUES&lt;/span&gt;
@@ -103,12 +103,12 @@
   &lt;/tbody&gt;
 &lt;/table&gt;
 
-&lt;h2 id=&quot;on-conflict&quot;&gt;On Conflict…&lt;/h2&gt;
 &lt;p&gt;But the next time the application tries to insert data for &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;2022-06-01&lt;/code&gt; the INSERT statement returns the error &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;duplicate key value violates unique constraint &quot;id_day&quot;&lt;/code&gt; because inserting the data would conflict with the constraint that each row have a unique (id, day) pair.&lt;/p&gt;
 
-&lt;p&gt;The &lt;a href=&quot;https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT&quot;&gt;ON CONFLICT&lt;/a&gt; clause acts a bit like a row based “catch” of a “try… catch…” statement. You declare what conflict you are interested in dealing with and how you want to deal with it at the row level.&lt;/p&gt;
+&lt;h2 id=&quot;on-conflict&quot;&gt;On Conflict…&lt;/h2&gt;
+&lt;p&gt;The &lt;a href=&quot;https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT&quot;&gt;ON CONFLICT&lt;/a&gt; clause acts a bit like a row based “catch” of a “try catch…” statement. &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;try&lt;/code&gt; to insert the row, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;catch and handle any conflict&lt;/code&gt;. In the  &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ON CONFLICT&lt;/code&gt; clause you declare what conflict you are interested in and how you want to deal with it at the row level.&lt;/p&gt;
 
-&lt;p&gt;There are two options for using ON CONFLICT&lt;/p&gt;
+&lt;p&gt;There are two options for using ON CONFLICT, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;DO NOTHING&lt;/code&gt; and &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;DO UPDATE&lt;/code&gt;&lt;/p&gt;
 
 &lt;h3 id=&quot;on-conflict-do-nothing&quot;&gt;ON CONFLICT DO NOTHING&lt;/h3&gt;
 &lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ON CONFLICT ... DO NOTHING&lt;/code&gt; inserts each row that doesn’t have a conflict and skips each row that does.&lt;/p&gt;
@@ -156,17 +156,21 @@
 &lt;h3 id=&quot;on-conflict-do-update&quot;&gt;ON CONFLICT DO UPDATE&lt;/h3&gt;
 &lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ON CONFLICT ... DO UPDATE&lt;/code&gt; inserts each row that doesn’t have a conflict and &lt;em&gt;updates&lt;/em&gt; each row that does.&lt;/p&gt;
 
-&lt;p&gt;In the update statement you have access to both the existing row data and the new row data that caused the conflict. You reference them like so:&lt;/p&gt;
+&lt;p&gt;In the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;DO UPDATE&lt;/code&gt; statement you have access to both the existing row data and the new row data, though referencing them is not quite obvious. You reference them like so:&lt;/p&gt;
 
 &lt;p&gt;Existing data =&amp;gt; &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;&amp;lt;table_name&amp;gt;.&amp;lt;field&amp;gt;&lt;/code&gt; ie &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;temp_agg.high&lt;/code&gt;&lt;/p&gt;
 
-&lt;p&gt;If you have aliased the table ie &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;INSERT INTO temp_agg as t&lt;/code&gt; then you will refernce the existing data as &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;t.high&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;If you have aliased the table, for example &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;INSERT INTO temp_agg as t&lt;/code&gt;, then you will reference the existing data as &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;t.high&lt;/code&gt;&lt;/p&gt;
 
 &lt;p&gt;New data =&amp;gt; &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;EXCLUDED.&amp;lt;field&amp;gt;&lt;/code&gt; ie &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;EXCLUDED.high&lt;/code&gt;&lt;/p&gt;
 
-&lt;p&gt;If your insert statement already references a table named &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;excluded&lt;/code&gt; you should alias it to avoid any naming conflicts.&lt;/p&gt;
+&lt;p&gt;If your insert statement already references a table named &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;excluded&lt;/code&gt; you need to alias it to avoid any naming conflicts.&lt;/p&gt;
 
-&lt;p&gt;The following SQL statements achieve the same result using different semantics:&lt;/p&gt;
+&lt;p&gt;The result we’re looking for is to update the high temperature for locations 1 &amp;amp; 2 on day &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;2022-06-01&lt;/code&gt; but location 3 is unchanged.&lt;/p&gt;
+
+&lt;p&gt;The following SQL statements achieve this using different semantics&lt;/p&gt;
+
+&lt;p&gt;In the first example, the conflict rows are only updated if the new (&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;EXCLUDED&lt;/code&gt;) high temperature is greater than the existing high temperature.&lt;/p&gt;
 &lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;INSERT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;INTO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt; 
 &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
 &lt;span class=&quot;k&quot;&gt;VALUES&lt;/span&gt;
@@ -177,6 +181,9 @@
 &lt;span class=&quot;k&quot;&gt;DO&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;UPDATE&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;SET&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EXCLUDED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; 
 &lt;span class=&quot;k&quot;&gt;WHERE&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EXCLUDED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;In the second example the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;GREATEST&lt;/code&gt; function is used to set the high temperature instead of filtering with a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;WHERE&lt;/code&gt; clause.&lt;/p&gt;
+
 &lt;div class=&quot;language-sql highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;INSERT&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;INTO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp_agg&lt;/span&gt; 
 &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;id&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;high&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;day&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
 &lt;span class=&quot;k&quot;&gt;VALUES&lt;/span&gt;
